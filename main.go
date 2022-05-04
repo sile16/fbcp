@@ -23,6 +23,7 @@ func main() {
 	//verbosePtr := flag.Bool("v", false, "Verbose output")
 	benchmarkPtr := flag.Bool("benchmark", false, "Run a benchmark against a single file.")
 	zerosPtr := flag.Bool("zeros", false, "Benchmark Uses zeros instead of random data")
+	readonlyPtr := flag.Bool("readonly", false, "Only read a file for the benchmark")
 
 	flag.Parse()
 
@@ -33,6 +34,7 @@ func main() {
 	benchmark := *benchmarkPtr
 	verify := *verifyPtr
 	zeros := *zerosPtr
+	readOnly := *readonlyPtr
 
 	pi, _ := os.Stdin.Stat() // get the FileInfo struct describing the standard input.
 	po, _ := os.Stdout.Stat() // get the FileInfo struct describing the standard input.
@@ -77,21 +79,32 @@ func main() {
 		}
 
 		nfs_bench, _ := NewNFSBench(dst_ff, threads, nodes, nodeID, uint64(sizeMB), verify, zeros)
-		fmt.Println("Running NFS write test.")
-		write_bytes_per_sec, hashValueWrite := nfs_bench.WriteTest()
+
+		var write_bytes_per_sec float64
+		var hashValueWrite []byte
+		if !readOnly{
+			fmt.Println("Running NFS write test.")
+			write_bytes_per_sec, hashValueWrite = nfs_bench.WriteTest()
+		}
+		
 		
 
 		fmt.Println("Running NFS read test.")
 		read_bytes_per_sec, hashValueRead := nfs_bench.ReadTest()
-		fmt.Printf("Write Throughput = %f MiB/s\n", write_bytes_per_sec)
+		if !readOnly{
+			fmt.Printf("Write Throughput = %f MiB/s\n", write_bytes_per_sec)
+		}
+		
 		fmt.Printf("Read Throughput = %f MiB/s\n", read_bytes_per_sec)
 
 		if verify {
-			fmt.Printf("Written Data Hash: %x\n", hashValueWrite )
+			
 			fmt.Printf("   Read Data Hash: %x\n", hashValueRead )
-
-			if !bytes.Equal(hashValueRead, hashValueWrite) {
-				fmt.Println("Error Error bad DATA !!!!!!!!!!!! ")
+			if !readOnly{
+				fmt.Printf("Written Data Hash: %x\n", hashValueWrite )
+				if !bytes.Equal(hashValueRead, hashValueWrite) {
+					fmt.Println("Error Error bad DATA !!!!!!!!!!!! ")
+				}
 			}
 		}
 

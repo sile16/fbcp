@@ -43,7 +43,6 @@ func (n *NFSInfo) Stream() {
 	pwg := &sync.WaitGroup{}
 	cwg := &sync.WaitGroup{}
 
-	
 	var bufPool = sync.Pool{
 		New: func() any {
 			// The Pool's New function should generally only return pointer

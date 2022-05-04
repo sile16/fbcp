@@ -165,10 +165,15 @@ func (n *NFSInfo) readOneFileChunk(offset uint64, threadID int) {
 
 	f.Seek(int64(n.nodeOffset + offset), io.SeekStart)
 	for {
+
+		// Read 1 MB
 		start_index := 0
 		for {
-			
-			n_bytes, err := f.Read(p[start_index:])
+			chunk := len(p)
+			if start_index + chunk > len(p) {
+				chunk = len(p) - start_index
+			}
+			n_bytes, err := f.Read(p[start_index:chunk+start_index])
 			start_index += n_bytes
 			if start_index == len(p) {
 				break
@@ -180,7 +185,7 @@ func (n *NFSInfo) readOneFileChunk(offset uint64, threadID int) {
 			}
 		}
 		
-
+		// Verify the 1 MB Chunk
 		if n.verify {
 			if byte_counter == 0{
 				// we read the first 1MB chunk of the file, and that pattern is used over and over
@@ -193,7 +198,7 @@ func (n *NFSInfo) readOneFileChunk(offset uint64, threadID int) {
 			}
 		}
 
-		byte_counter += uint64(n.sizeMB * 1024 * 1024)
+		byte_counter += uint64(len(p))
 		
 		if byte_counter == n.sizeMB * 1024*1024 {
 			break
