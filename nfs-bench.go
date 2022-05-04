@@ -9,12 +9,12 @@ import (
 	"crypto/md5"
 )
 
-func NewNFSBench(dst_ff *FlexFile, concurrency int,  nodes int, nodeID int, sizeMB uint64 ) (*NFSInfo, error) {
+func NewNFSBench(dst_ff *FlexFile, concurrency int,  nodes int, nodeID int, sizeMB uint64, verify bool ) (*NFSInfo, error) {
 	nodeOffset := uint64(nodeID) * uint64(concurrency) * sizeMB * 1024 * 1024
 
 	nfsBench := &NFSInfo{ 
 		concurrency: concurrency, filesWritten: 0, dst_ff: dst_ff,
-	    hashes: make([][]byte, concurrency), sizeMB: sizeMB, nodeOffset: nodeOffset,}
+	    hashes: make([][]byte, concurrency), sizeMB: sizeMB, nodeOffset: nodeOffset, verify: verify}
 	
 	return nfsBench, nil
 }
@@ -65,7 +65,7 @@ func (n *NFSInfo) writeOneFileChunk(offset uint64, threadID int) {
 	var bytes_written uint64
 	bytes_written = 0
 
-	//rand.Seed(offset)
+
 	rand.Read(srcBuf)
 	f.Seek(int64(n.nodeOffset + offset), io.SeekStart)
 	for i := uint64(0); i < n.sizeMB; i++ {
@@ -73,7 +73,9 @@ func (n *NFSInfo) writeOneFileChunk(offset uint64, threadID int) {
 		if n_bytes != len(srcBuf) {
 			fmt.Printf("Thread %d Warning: Not all bytes written!", threadID)
 		}
-		hasher.Write(srcBuf)
+		if n.verify {
+			 hasher.Write(srcBuf)
+		}
 		bytes_written += uint64(n_bytes)
 		
 		if i % (n.sizeMB / 2) == 0 && i != 0 {
@@ -135,7 +137,9 @@ func (n *NFSInfo) readOneFileChunk(offset uint64, threadID int) {
 
 	for {
 		n_bytes, err := f.Read(p)
-		hasher.Write(p)
+		if n.verify {
+			hasher.Write(p)
+		}
 		byte_counter += uint64(n_bytes)
 		
 		if byte_counter == n.sizeMB * 1024*1024 {

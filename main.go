@@ -19,6 +19,7 @@ func main() {
 	nodeIDPtr := flag.Int("node",0, "node ID number, 0 Indexed." )
 	sizeMBPtr := flag.Int64("sizeMB", 128, "Number MB generated per thread during benchmark")
 	threadsPtr := flag.Int("threads", 0, "Number of concurrent threads default is core count * 2")
+	verifyPtr := flag.Bool("verify", false, "re-read data to calculate hashes to verify data trasnfer integrity.")
 	//verbosePtr := flag.Bool("v", false, "Verbose output")
 	benchmarkPtr := flag.Bool("benchmark", false, "Run a benchmark against a single file.")
 
@@ -29,6 +30,7 @@ func main() {
 	sizeMB := *sizeMBPtr
 	threads := *threadsPtr
 	benchmark := *benchmarkPtr
+	verify := *verifyPtr
 
 	pi, _ := os.Stdin.Stat() // get the FileInfo struct describing the standard input.
 	po, _ := os.Stdout.Stat() // get the FileInfo struct describing the standard input.
@@ -70,7 +72,7 @@ func main() {
 			fmt.Printf("Recommend 2 threads / core, currently %d", threads )
 		}
 
-		nfs_bench, _ := NewNFSBench(dst_ff, threads, nodes, nodeID, uint64(sizeMB))
+		nfs_bench, _ := NewNFSBench(dst_ff, threads, nodes, nodeID, uint64(sizeMB), verify)
 		fmt.Println("Running NFS write test.")
 		write_bytes_per_sec, hashValueWrite := nfs_bench.WriteTest()
 		fmt.Printf("Write Throughput = %f MiB/s\n", write_bytes_per_sec)
@@ -79,11 +81,16 @@ func main() {
 		read_bytes_per_sec, hashValueRead := nfs_bench.ReadTest()
 		fmt.Printf("Read Throughput = %f MiB/s\n", read_bytes_per_sec)
 
-		fmt.Printf("Written Data Hash: %x\n", hashValueWrite )
-		fmt.Printf("   Read Data Hash: %x\n", hashValueRead )
+		if verify {
+			fmt.Printf("Written Data Hash: %x\n", hashValueWrite )
+			fmt.Printf("   Read Data Hash: %x\n", hashValueRead )
 
-		if !bytes.Equal(hashValueRead, hashValueWrite) {
-		fmt.Println("Error Error bad DATA !!!!!!!!!!!! ")
+			if !bytes.Equal(hashValueRead, hashValueWrite) {
+				fmt.Println("Error Error bad DATA !!!!!!!!!!!! ")
+		}
+		
+
+		
 	}
 
 		os.Exit(0)
