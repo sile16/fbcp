@@ -51,7 +51,7 @@ func (n *NFSInfo) WriteTest() (float64, []byte) {
 func (n *NFSInfo) writeOneFileChunk(offset uint64, threadID int) {
 	defer n.wg.Done()
 
-	srcBuf := make([]byte, 1024*1024)
+	srcBuf := make([]byte,16 * 1024*1024)
 
 	f, err := n.dst_ff.Open()
 	if err != nil {
@@ -65,10 +65,9 @@ func (n *NFSInfo) writeOneFileChunk(offset uint64, threadID int) {
 	var bytes_written uint64
 	bytes_written = 0
 
-
 	rand.Read(srcBuf)
 	f.Seek(int64(n.nodeOffset + offset), io.SeekStart)
-	for i := uint64(0); i < n.sizeMB; i++ {
+	for {
 		n_bytes, _ := f.Write(srcBuf)
 		if n_bytes != len(srcBuf) {
 			fmt.Printf("Thread %d Warning: Not all bytes written!", threadID)
@@ -77,10 +76,14 @@ func (n *NFSInfo) writeOneFileChunk(offset uint64, threadID int) {
 			 hasher.Write(srcBuf)
 		}
 		bytes_written += uint64(n_bytes)
-		
-		if i % (n.sizeMB / 2) == 0 && i != 0 {
-			fmt.Printf("Thread Write %d - Chunk 50%% \n", threadID)
+
+		if bytes_written >= n.sizeMB * 1024 * 1024{
+			break
 		}
+		
+		//if i == n.sizeMB / 2 {
+		//	fmt.Printf("Thread Write %d - Chunk 50%% \n", threadID)
+		//}
 	}
 	fmt.Printf("Thread Write %d - Done !!!!!! \n", threadID)
 	
@@ -122,7 +125,7 @@ func (n *NFSInfo) readOneFileChunk(offset uint64, threadID int) {
 	defer n.wg.Done()
 
 	hasher := md5.New()
-	p := make([]byte, 512*1024)
+	p := make([]byte, 16*1024*1024)
 	byte_counter := uint64(0)
 
 	f, err := n.dst_ff.Open()
