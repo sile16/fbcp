@@ -13,12 +13,12 @@ import (
 	"github.com/vbauerster/mpb/v7/decor"
 )
 
-func NewNFSCopy(src_ff *FlexFile, dst_ff *FlexFile, concurrency int, nodes int, nodeID int ) (*NFSInfo, error) {
+func NewNFSCopy(src_ff *FlexFile, dst_ff *FlexFile, concurrency int, nodes int, nodeID int , verify bool) (*NFSInfo, error) {
 
 	nfsNFSCopy := &NFSInfo{
 		src_ff: src_ff, dst_ff: dst_ff, 
 		concurrency: concurrency, filesWritten: 0,
-	    hashes: make([][]byte, concurrency)}
+	    hashes: make([][]byte, concurrency), verify: verify,}
 	
 	if !nfsNFSCopy.src_ff.exists {
 		fmt.Printf("Error: source fle %s doesn't exist", nfsNFSCopy.src_ff.file_name)
@@ -110,17 +110,8 @@ func (n *NFSInfo) SpreadCopy() (float64, []byte) {
 				)
 		go n.copyOneFileChunk(offset, max_bytes_to_read, i, bar)
 		offset += n.sizeMB
-
 	}
-
-	// This timer is more like a time out value now,
-	//time.Sleep(time.Duration(n.durationSeconds) * time.Second)
-	//atomic.StoreInt32(&n.atm_finished, 1)
-	n.wg.Wait()
-	n.filesWritten += n.concurrency
-
-
-
+	
 	hasher := md5.New()
 	for  i :=  0 ; i < len(n.hashes); i++ {
 		hasher.Write(n.hashes[i])
@@ -233,10 +224,6 @@ func (n *NFSInfo) copyOneFileChunk(offset uint64, num_bytes uint64, threadID int
 	f_dst.Seek(int64(offset), io.SeekStart)
 	
 
-
-	//proxyReader := bar.ProxyReader(f_dst)
-	//defer proxyReader.Close()
-
 	for {
 		if atomic.LoadInt32(&n.atm_finished) == 1 {
 			break
@@ -260,8 +247,10 @@ func (n *NFSInfo) copyOneFileChunk(offset uint64, num_bytes uint64, threadID int
 				return
 			}
 		}
+		if n.verify {
+			hasher.Write(srcBuf[0:n_bytes])
+		}
 		
-		hasher.Write(srcBuf[0:n_bytes])
 		n_bytes_written, err := f_dst.Write(srcBuf[0:n_bytes])
 		thread_bytes_written += uint64(n_bytes_written)
 		bar.IncrBy(n_bytes_written)
@@ -302,114 +291,3 @@ func (n *NFSInfo) copyOneFileChunk(offset uint64, num_bytes uint64, threadID int
 	n.hashes[threadID] = hasher.Sum([]byte{})
 	atomic.AddUint64(&n.atm_counter_bytes_written, thread_bytes_written)
 }
-
-
-/*
-func (n *NFSCopy) ReadTest() ( float64, []byte ) {
-
-	if n.filesWritten == 0 {
-		fmt.Println("[error] Unable to perform ReadTest, no files written.")
-		return float64(0), nil
-	}
-	atomic.StoreInt32(&n.atm_finished, 0)
-	atomic.StoreUint64(&n.atm_counter_bytes_read, 0)
-
-	start := time.Now()
-
-	offset := int64(0)
-	for i := 0; i < n.filesWritten; i++ {
-		n.wg.Add(1)
-		go n.readOneFileChunk(n.dstFile, offset, n.sizeMB, i)
-		offset += n.sizeMB
-	}
-
-	//time.Sleep(time.Duration(n.durationSeconds) * time.Second)
-	//atomic.StoreInt32(&n.atm_finished, 1)
-	n.wg.Wait()
-	
-
-	hasher := md5.New()
-	for  i :=  0 ; i < len(n.hashes); i++ {
-		hasher.Write(n.hashes[i])
-	}
-	hashValue :=hasher.Sum([]byte{})
-
-	elapsed := time.Since(start)
-	total_bytes := atomic.LoadUint64(&n.atm_counter_bytes_read) / ( 1024 * 1024 )
-	
-	fmt.Printf("Read Finished: Time: %f s , %d  MiB Transfered\n", elapsed.Seconds(), total_bytes)
-	fmt.Printf("Read Data Hash: %x\n", hashValue)
-
-	return float64(total_bytes) / float64(elapsed.Seconds()) , hashValue
-}
-
-
-func (n *NFSCopy) readOneFileChunk(fname string, offset int64, sizeMB int64, threadID int) {
-
-	defer n.wg.Done()
-
-	mount, err := nfs.DialMount(n.nfshost, true)
-	if err != nil {
-		fmt.Println(err)
-		return
-	}
-	
-	target, err := mount.Mount(n.export, n.authUnix.Auth(), true)
-	if err != nil {
-		fmt.Println("err")
-		return
-	}
-	defer target.Close()
-
-	hasher := md5.New()
-	p := make([]byte, 512*1024)
-	byte_counter := uint64(0)
-
-	f, err := target.Open(fname)
-	if err != nil {
-		fmt.Println(err)
-		return
-	}
-	defer f.Close()
-
-	f.Seek((n.nodeOffset + offset) * 1024 * 1024, io.SeekStart)
-	half := false
-
-	for {
-		if atomic.LoadInt32(&n.atm_finished) == 1 {
-			break
-		}
-
-		n_bytes, err := f.Read(p)
-		hasher.Write(p)
-		byte_counter += uint64(n_bytes)
-		
-
-		if byte_counter == uint64(sizeMB)*1024*1024 {
-			fmt.Printf("Thread Read %d - Done!!!!!\n", threadID)
-			break
-		}
-		
-		if  byte_counter > uint64(sizeMB)*1024*1024 {
-			fmt.Printf("Thread %d Warning: Read more bytes than expected \n", threadID)
-			break
-		}
-
-		if err == io.EOF {
-			fmt.Printf("Thread %d Warning: Unexpected End of File! \n", threadID)
-			break
-		}
-
-		if !half && byte_counter >= uint64(sizeMB)*1024*1024/2 {
-			fmt.Printf("Thread Read %d - 50%%\n", threadID)
-			half = true
-		}
-		
-		
-	}
-	n.hashes[threadID] = hasher.Sum([]byte{})
- 	fmt.Printf("Thread Read %d - Done!!!!! \n", threadID)
-	atomic.AddUint64(&n.atm_counter_bytes_read, byte_counter)
-}
-
-*/

@@ -51,7 +51,7 @@ func (n *NFSInfo) WriteTest() (float64, []byte) {
 func (n *NFSInfo) writeOneFileChunk(offset uint64, threadID int) {
 	defer n.wg.Done()
 
-	srcBuf := make([]byte,16 * 1024*1024)
+	srcBuf := make([]byte,1024*1024)
 
 	f, err := n.dst_ff.Open()
 	if err != nil {
@@ -114,9 +114,6 @@ func (n *NFSInfo) ReadTest() ( float64, []byte ) {
 
 	elapsed := time.Since(start)
 	total_bytes := atomic.LoadUint64(&n.atm_counter_bytes_read) / ( 1024 * 1024 )
-	
-	fmt.Printf("Read Finished: Time: %f s , %d  MiB Transfered\n", elapsed.Seconds(), total_bytes)
-	fmt.Printf("Read Data Hash: %x\n", hashValue)
 
 	return float64(total_bytes) / float64(elapsed.Seconds()) , hashValue
 }
@@ -125,7 +122,7 @@ func (n *NFSInfo) readOneFileChunk(offset uint64, threadID int) {
 	defer n.wg.Done()
 
 	hasher := md5.New()
-	p := make([]byte, 16*1024*1024)
+	p := make([]byte, 1024*1024)
 	byte_counter := uint64(0)
 
 	f, err := n.dst_ff.Open()

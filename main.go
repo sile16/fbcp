@@ -151,7 +151,7 @@ func main() {
 		
 
 	} else {
-		nfs, err := NewNFSCopy(src_ff, dst_ff, threads, nodes, nodeID)
+		nfs, err := NewNFSCopy(src_ff, dst_ff, threads, nodes, nodeID, verify)
 
 		if err != nil {
 			fmt.Println(err)
@@ -161,8 +161,10 @@ func main() {
 		fmt.Println("Running NFS MultiCopy.")
 		copy_bytes_per_sec, hashValueWrite := nfs.SpreadCopy()
 		fmt.Printf("Write Throughput = %f MiB/s\n", copy_bytes_per_sec)
-
-		fmt.Printf("Written Data Hash: %x\n", hashValueWrite )
+		if verify {
+			fmt.Printf("Written Data Hash: %x\n", hashValueWrite )
+		}
+		
 		
 	}
 
