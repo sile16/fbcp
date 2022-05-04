@@ -164,10 +164,22 @@ func (n *NFSInfo) readOneFileChunk(offset uint64, threadID int) {
 	defer f.Close()
 
 	f.Seek(int64(n.nodeOffset + offset), io.SeekStart)
-	half := false
-
 	for {
-		n_bytes, err := f.Read(p)
+		start_index := 0
+		for {
+			
+			n_bytes, err := f.Read(p[start_index:])
+			start_index += n_bytes
+			if start_index == len(p) {
+				break
+			}
+
+			if err == io.EOF {
+				fmt.Printf("Thread %d Warning: Unexpected End of File! \n", threadID)
+				break
+			}
+		}
+		
 
 		if n.verify {
 			if byte_counter == 0{
@@ -181,12 +193,7 @@ func (n *NFSInfo) readOneFileChunk(offset uint64, threadID int) {
 			}
 		}
 
-		byte_counter += uint64(n_bytes)
-
-		if n_bytes != len(p) {
-			fmt.Print("Error didn't read all the bytes")
-			break
-		}
+		byte_counter += uint64(n.sizeMB * 1024 * 1024)
 		
 		if byte_counter == n.sizeMB * 1024*1024 {
 			break
@@ -197,14 +204,8 @@ func (n *NFSInfo) readOneFileChunk(offset uint64, threadID int) {
 			break
 		}
 
-		if err == io.EOF {
-			fmt.Printf("Thread %d Warning: Unexpected End of File! \n", threadID)
-			break
-		}
-
-		if !half && byte_counter >= n.sizeMB*1024*1024/2 {
+		if byte_counter == n.sizeMB*1024*1024/2 {
 			fmt.Printf("Thread Read %d - 50%%\n", threadID)
-			half = true
 		}
 	}
 
