@@ -22,6 +22,7 @@ func main() {
 	verifyPtr := flag.Bool("verify", false, "re-read data to calculate hashes to verify data trasnfer integrity.")
 	//verbosePtr := flag.Bool("v", false, "Verbose output")
 	benchmarkPtr := flag.Bool("benchmark", false, "Run a benchmark against a single file.")
+	zerosPtr := flag.Bool("zeros", false, "Benchmark Uses zeros instead of random data")
 
 	flag.Parse()
 
@@ -31,6 +32,7 @@ func main() {
 	threads := *threadsPtr
 	benchmark := *benchmarkPtr
 	verify := *verifyPtr
+	zeros := *zerosPtr
 
 	pi, _ := os.Stdin.Stat() // get the FileInfo struct describing the standard input.
 	po, _ := os.Stdout.Stat() // get the FileInfo struct describing the standard input.
@@ -72,13 +74,14 @@ func main() {
 			fmt.Printf("Recommend 2 threads / core, currently %d", threads )
 		}
 
-		nfs_bench, _ := NewNFSBench(dst_ff, threads, nodes, nodeID, uint64(sizeMB), verify)
+		nfs_bench, _ := NewNFSBench(dst_ff, threads, nodes, nodeID, uint64(sizeMB), verify, zeros)
 		fmt.Println("Running NFS write test.")
 		write_bytes_per_sec, hashValueWrite := nfs_bench.WriteTest()
-		fmt.Printf("Write Throughput = %f MiB/s\n", write_bytes_per_sec)
+		
 
 		fmt.Println("Running NFS read test.")
 		read_bytes_per_sec, hashValueRead := nfs_bench.ReadTest()
+		fmt.Printf("Write Throughput = %f MiB/s\n", write_bytes_per_sec)
 		fmt.Printf("Read Throughput = %f MiB/s\n", read_bytes_per_sec)
 
 		if verify {

@@ -10,12 +10,13 @@ import (
 	"time"
 )
 
-func NewNFSBench(dst_ff *FlexFile, concurrency int,  nodes int, nodeID int, sizeMB uint64, verify bool ) (*NFSInfo, error) {
+func NewNFSBench(dst_ff *FlexFile, concurrency int,  nodes int, nodeID int, sizeMB uint64, verify bool, zeros bool) (*NFSInfo, error) {
 	nodeOffset := uint64(nodeID) * uint64(concurrency) * sizeMB * 1024 * 1024
 
 	nfsBench := &NFSInfo{ 
 		concurrency: concurrency, filesWritten: 0, dst_ff: dst_ff,
-	    hashes: make([][]byte, concurrency), sizeMB: sizeMB, nodeOffset: nodeOffset, verify: verify}
+	    hashes: make([][]byte, concurrency), sizeMB: sizeMB, nodeOffset: nodeOffset, 
+		verify: verify, zeros: zeros,}
 	
 	return nfsBench, nil
 }
@@ -53,7 +54,9 @@ func (n *NFSInfo) writeOneFileChunk(offset uint64, threadID int) {
 	defer n.wg.Done()
 
 	srcBuf := make([]byte,1024*1024)
-
+	for i := range srcBuf{
+		srcBuf[i] = 0
+	}
 	f, err := n.dst_ff.Open()
 	if err != nil {
 		fmt.Print("Error opening destination file.")
@@ -66,7 +69,10 @@ func (n *NFSInfo) writeOneFileChunk(offset uint64, threadID int) {
 	var bytes_written uint64
 	bytes_written = 0
 
-	rand.Read(srcBuf)
+	if !n.zeros{
+		rand.Read(srcBuf)
+	}
+		
 	f.Seek(int64(n.nodeOffset + offset), io.SeekStart)
 	for {
 		n_bytes, _ := f.Write(srcBuf)

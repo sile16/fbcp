@@ -21,6 +21,7 @@ type NFSInfo struct {
 	nodeOffset      uint64
 	nodeSize        uint64
 	verify          bool
+	zeros           bool
 
 	wg                        sync.WaitGroup
 	mu                        sync.Mutex
