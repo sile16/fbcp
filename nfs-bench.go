@@ -1,12 +1,13 @@
 package main
 
 import (
+	"bytes"
+	"crypto/md5"
 	"fmt"
 	"io"
 	"math/rand"
 	"sync/atomic"
 	"time"
-	"crypto/md5"
 )
 
 func NewNFSBench(dst_ff *FlexFile, concurrency int,  nodes int, nodeID int, sizeMB uint64, verify bool ) (*NFSInfo, error) {
@@ -72,9 +73,7 @@ func (n *NFSInfo) writeOneFileChunk(offset uint64, threadID int) {
 		if n_bytes != len(srcBuf) {
 			fmt.Printf("Thread %d Warning: Not all bytes written!", threadID)
 		}
-		if n.verify {
-			 hasher.Write(srcBuf)
-		}
+		
 		bytes_written += uint64(n_bytes)
 
 		if bytes_written >= n.sizeMB * 1024 * 1024{
@@ -86,6 +85,20 @@ func (n *NFSInfo) writeOneFileChunk(offset uint64, threadID int) {
 		//}
 	}
 	fmt.Printf("Thread Write %d - Done !!!!!! \n", threadID)
+
+	// calculate hash out of the write latency path
+	var hash_written int
+	hash_written = 0
+
+	if n.verify {
+		for {
+			n_bytes, _ := hasher.Write(srcBuf)
+			hash_written += n_bytes
+			if hash_written >= int(n.sizeMB * 1024 * 1024){
+				break
+			}
+		}
+   }
 	
 	n.hashes[threadID] = hasher.Sum([]byte{})
 	atomic.AddUint64(&n.atm_counter_bytes_written, bytes_written)
@@ -107,6 +120,7 @@ func (n *NFSInfo) ReadTest() ( float64, []byte ) {
 	n.wg.Wait()
 	
 	hasher := md5.New()
+
 	for  i :=  0 ; i < len(n.hashes); i++ {
 		hasher.Write(n.hashes[i])
 	}
@@ -122,6 +136,10 @@ func (n *NFSInfo) readOneFileChunk(offset uint64, threadID int) {
 	defer n.wg.Done()
 
 	hasher := md5.New()
+	var hash_buff []byte
+	if n.verify {
+		hash_buff = make([]byte, 1024*1024)
+	}
 	p := make([]byte, 1024*1024)
 	byte_counter := uint64(0)
 
@@ -138,8 +156,16 @@ func (n *NFSInfo) readOneFileChunk(offset uint64, threadID int) {
 	for {
 		n_bytes, err := f.Read(p)
 		if n.verify {
-			hasher.Write(p)
+			if byte_counter == 0{
+				copy(hash_buff, p)
+				hasher.Write(p)
+			} else {
+				if !bytes.Equal(p, hash_buff){
+					fmt.Printf("Data Compare Failed.")
+				}
+			}
 		}
+
 		byte_counter += uint64(n_bytes)
 		
 		if byte_counter == n.sizeMB * 1024*1024 {
@@ -161,6 +187,21 @@ func (n *NFSInfo) readOneFileChunk(offset uint64, threadID int) {
 			half = true
 		}
 	}
+
+	var hash_written int
+	hash_written = 0
+
+	if n.verify {
+		for {
+			n_bytes, _ := hasher.Write(hash_buff)
+			hash_written += n_bytes
+			if hash_written >= int(n.sizeMB * 1024 * 1024){
+				break
+			}
+		}
+   }
+
+
 	n.hashes[threadID] = hasher.Sum([]byte{})
  	fmt.Printf("Thread Read %d - Done!!!!! \n", threadID)
 	atomic.AddUint64(&n.atm_counter_bytes_read, byte_counter)
