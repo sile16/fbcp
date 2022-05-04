@@ -48,11 +48,13 @@ func main() {
 		pipeout = true
 	}
 	
+	// Flex file allows us to use a NFS path/ local file or a Pipe transparentyly.
 	var src_ff *FlexFile
 	var dst_ff *FlexFile
 	var err error
 
 	if benchmark{
+		// Benchmark, uses random data, or zeros to write to a file and read it back.
 		if flag.NArg() !=1 {
 			flag.Usage()
 			fmt.Print("Please provide a single test file.")
@@ -90,11 +92,8 @@ func main() {
 
 			if !bytes.Equal(hashValueRead, hashValueWrite) {
 				fmt.Println("Error Error bad DATA !!!!!!!!!!!! ")
+			}
 		}
-		
-
-		
-	}
 
 		os.Exit(0)
 	}
@@ -142,7 +141,7 @@ func main() {
 		threads = 16
 	}
 
-	//var results []string
+	//  FIX THIS BACK FOR COPY to WORK
 	//if pipein || pipeout {
 	if true {
 		nfs, err := NewNFSStream(src_ff, dst_ff, threads)

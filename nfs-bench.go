@@ -34,6 +34,7 @@ func (n *NFSInfo) WriteTest() (float64, []byte) {
 		offset += n.sizeMB * 1024 * 1024
 	}
 	n.wg.Wait()
+	elapsed := time.Since(start)
 
 	hasher := md5.New()
 	for  i :=  0 ; i < len(n.hashes); i++ {
@@ -41,7 +42,7 @@ func (n *NFSInfo) WriteTest() (float64, []byte) {
 	}
 	hashValue :=hasher.Sum([]byte{})
 
-	elapsed := time.Since(start)
+	
 	total_bytes := atomic.LoadUint64(&n.atm_counter_bytes_written) / ( 1024 * 1024 )
 	
 	fmt.Printf("Write Finished: Time: %f s , %d  MiB Transfered\n", elapsed.Seconds(), total_bytes)
@@ -82,7 +83,10 @@ func (n *NFSInfo) writeOneFileChunk(offset uint64, threadID int) {
 		
 		bytes_written += uint64(n_bytes)
 
-		if bytes_written >= n.sizeMB * 1024 * 1024{
+		if bytes_written == n.sizeMB * 1024 * 1024{
+			break
+		} else if bytes_written > n.sizeMB * 1024 * 1024 {
+			fmt.Print("Wrote more bytes than expected.")
 			break
 		}
 		
@@ -93,18 +97,15 @@ func (n *NFSInfo) writeOneFileChunk(offset uint64, threadID int) {
 	fmt.Printf("Thread Write %d - Done !!!!!! \n", threadID)
 
 	// calculate hash out of the write latency path
-	var hash_written int
-	hash_written = 0
+	//var hash_written int
+	//hash_written = 0
 
+	// this relies on a 1MB buffer
 	if n.verify {
-		for {
-			n_bytes, _ := hasher.Write(srcBuf)
-			hash_written += n_bytes
-			if hash_written >= int(n.sizeMB * 1024 * 1024){
-				break
-			}
+		for i := 0 ; uint64(i) < n.sizeMB ; i++ {
+			hasher.Write(srcBuf)
 		}
-   }
+    }
 	
 	n.hashes[threadID] = hasher.Sum([]byte{})
 	atomic.AddUint64(&n.atm_counter_bytes_written, bytes_written)
@@ -161,13 +162,18 @@ func (n *NFSInfo) readOneFileChunk(offset uint64, threadID int) {
 
 	for {
 		n_bytes, err := f.Read(p)
+		if err != nil {
+			fmt.Printf("Error reading file %s", err)
+			panic(err)
+		}
 		if n.verify {
 			if byte_counter == 0{
+				// we read the first 1MB chunk of the file, and that pattern is used over and over
 				copy(hash_buff, p)
-				hasher.Write(p)
 			} else {
+				// now we just do a byte compare to validate the data but compute the hashes later.
 				if !bytes.Equal(p, hash_buff){
-					fmt.Printf("Data Compare Failed.")
+					fmt.Printf("Data Compare Failed.\n")
 				}
 			}
 		}
@@ -194,19 +200,12 @@ func (n *NFSInfo) readOneFileChunk(offset uint64, threadID int) {
 		}
 	}
 
-	var hash_written int
-	hash_written = 0
-
+	// this relies on a 1MB buffer
 	if n.verify {
-		for {
-			n_bytes, _ := hasher.Write(hash_buff)
-			hash_written += n_bytes
-			if hash_written >= int(n.sizeMB * 1024 * 1024){
-				break
-			}
+		for i := 0 ; uint64(i) < n.sizeMB ; i++ {
+			hasher.Write(hash_buff)
 		}
-   }
-
+    }
 
 	n.hashes[threadID] = hasher.Sum([]byte{})
  	fmt.Printf("Thread Read %d - Done!!!!! \n", threadID)
