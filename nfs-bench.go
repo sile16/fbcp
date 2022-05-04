@@ -162,10 +162,6 @@ func (n *NFSInfo) readOneFileChunk(offset uint64, threadID int) {
 
 	for {
 		n_bytes, err := f.Read(p)
-		if err != nil {
-			fmt.Printf("Error reading file %s", err)
-			panic(err)
-		}
 		if n.verify {
 			if byte_counter == 0{
 				// we read the first 1MB chunk of the file, and that pattern is used over and over

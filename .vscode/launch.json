@@ -18,7 +18,7 @@
             "request": "launch",
             "mode": "debug",
             "program": "${workspaceFolder}",
-            "args": [ "-threads", "4", "-sizeMB", "16", "-benchmark", "-verify","../junk6"]
+            "args": [ "-threads", "4", "-sizeMB", "16", "-benchmark", "-verify","192.168.20.20:/data/junk1"]
         }
     ]
 }
