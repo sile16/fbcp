@@ -76,11 +76,17 @@ func (n *NFSInfo) writeOneFileChunk(offset uint64, threadID int) {
 		
 	f.Seek(int64(n.nodeOffset + offset), io.SeekStart)
 	for {
-		n_bytes, _ := f.Write(srcBuf)
+		n_bytes, err := f.Write(srcBuf)
+		if err != nil {
+			fmt.Printf("Error writing to file. %s", err)
+			break
+		}
 		if n_bytes != len(srcBuf) {
 			fmt.Printf("Thread %d Warning: Not all bytes written!", threadID)
 		}
-		
+		if n_bytes < len(srcBuf) {
+			fmt.Print("Not all bytes written")
+		}
 		bytes_written += uint64(n_bytes)
 
 		if bytes_written == n.sizeMB * 1024 * 1024{
@@ -162,6 +168,7 @@ func (n *NFSInfo) readOneFileChunk(offset uint64, threadID int) {
 
 	for {
 		n_bytes, err := f.Read(p)
+
 		if n.verify {
 			if byte_counter == 0{
 				// we read the first 1MB chunk of the file, and that pattern is used over and over
@@ -175,6 +182,11 @@ func (n *NFSInfo) readOneFileChunk(offset uint64, threadID int) {
 		}
 
 		byte_counter += uint64(n_bytes)
+
+		if n_bytes != len(p) {
+			fmt.Print("Error didn't read all the bytes")
+			break
+		}
 		
 		if byte_counter == n.sizeMB * 1024*1024 {
 			break
