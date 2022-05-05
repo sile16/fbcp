@@ -86,8 +86,8 @@ func (n *NFSInfo) SpreadCopy() (float64, []byte) {
 	offset := n.nodeOffset
 
 	for i := 0; i < n.concurrency && offset < n.src_ff.size; i++ {
-		//fname := generateTestFilename(n.uniqueId, i)
-		n.wg.Add(1)
+		
+
 		
 		// check to see if we would hit end of the file before even starting.
 		if (offset) > n.src_ff.size {
@@ -113,9 +113,11 @@ func (n *NFSInfo) SpreadCopy() (float64, []byte) {
 						decor.EwmaSpeed(decor.UnitKiB, "% .1f", 60),
 					),
 				)
+		n.wg.Add(1)
 		go n.copyOneFileChunk(offset, max_bytes_to_read, i, bar)
 		offset += n.sizeMB
 	}
+	n.wg.Wait()
 	
 	hasher := md5.New()
 	for  i :=  0 ; i < len(n.hashes); i++ {

@@ -154,7 +154,6 @@ func main() {
 		threads = 16
 	}
 
-	//  FIX THIS BACK FOR COPY to WORK
 	if pipein || pipeout {
 		//fmt.Printf("sourc: %t\n", src_ff.is_pipe)
 		//fmt.Printf("dest:  %t\n", dst_ff.is_pipe)
@@ -164,8 +163,6 @@ func main() {
 			return
 		}
 		nfs.Stream()
-		
-
 	} else {
 		nfs, err := NewNFSCopy(src_ff, dst_ff, threads, nodes, nodeID, verify)
 
@@ -180,10 +177,5 @@ func main() {
 		if verify {
 			fmt.Printf("Written Data Hash: %x\n", hashValueWrite )
 		}
-		
-		
 	}
-
-
-
 }

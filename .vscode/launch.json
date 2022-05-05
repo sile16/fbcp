@@ -5,12 +5,12 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "name": "Launch file",
+            "name": "Local Spread Copy",
             "type": "go",
             "request": "launch",
             "mode": "debug",
             "program": "${workspaceFolder}",
-            "args": ["-threads", "2", "../junk", "../junk1"]
+            "args": ["-threads", "2", "../junk6", "../junk1"]
         },
         {
             "name": "Benchmark Test",
