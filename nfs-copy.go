@@ -8,7 +8,6 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/joshuarobinson/go-nfs-client/nfs"
 	"github.com/vbauerster/mpb/v7"
 	"github.com/vbauerster/mpb/v7/decor"
 )
@@ -148,79 +147,23 @@ func (n *NFSInfo) copyOneFileChunk(offset uint64, num_bytes uint64, threadID int
 
 	// Open the source file.
 
-	if n.src_ff.is_nfs {
-		mount_src, err := nfs.DialMount(n.src_ff.nfs_host, true)
-		if err != nil {
-			fmt.Println("Portmapper failed.")
-			fmt.Println(err)
-			return
-		}
-		defer mount_src.Close()
-		
-		target_src, err := mount_src.Mount(n.src_ff.export, n.authUnix.Auth(), true)
-		if err != nil {
-			fmt.Println("Unable to mount.")
-			fmt.Println(err)
-			return
-		}
-		defer target_src.Close()
-
-		f_src, err = target_src.OpenFile(n.src_ff.file_name, os.FileMode(int(0644)))
-		if err != nil {
-			fmt.Printf("OpenFile %s failed\n", n.src_ff.file_name)
-			fmt.Println(err)
-			return
-		}
-		defer f_src.Close()
-
-	} else {
-		f_src, err = os.Open(n.src_ff.file_full_path)
-		if err != nil {
-			fmt.Printf("OpenFile %s failed\n", n.src_ff.file_full_path)
-			fmt.Println(err)
-			return
-		}
-		defer f_src.Close()
+	f_src, err = n.src_ff.Open()
+	if err != nil {
+		fmt.Print("Error opening source file.")
+		return
 	}
+	defer f_src.Close()
 
 	// Open the Dest File
-	if n.dst_ff.is_nfs {
-		mount_dst, err := nfs.DialMount(n.dst_ff.nfs_host, true)
-		if err != nil {
-			fmt.Println("Portmapper failed.")
-			fmt.Println(err)
-			return
-		}
-		defer mount_dst.Close()
-		
-		target_dst, err := mount_dst.Mount(n.dst_ff.export, n.authUnix.Auth(), true)
-		if err != nil {
-			fmt.Println("Unable to mount.")
-			fmt.Println(err)
-			return
-		}
-		defer target_dst.Close()
-
-		f_dst, err = target_dst.OpenFile(n.dst_ff.file_name, os.FileMode(int(0777)))
-		if err != nil {
-			fmt.Printf("OpenFile %s failed\n", n.dst_ff.file_name)
-			fmt.Println(err)
-			return
-		}
-		
-
-	} else {
-		f_dst, err = os.Create(n.dst_ff.file_full_path)
-		if err != nil {
-			fmt.Printf("OpenFile %s failed\n", n.dst_ff.file_full_path)
-			fmt.Println(err)
-			return
-		}
-
+	f_dst, err = n.src_ff.Open()
+	if err != nil {
+		fmt.Print("Error opening destination file.")
+		return
 	}
+	defer f_dst.Close()
 	
 
-	srcBuf := make([]byte,32*1024*1024)
+	srcBuf := make([]byte,1*1024*1024)
 
 	hasher := md5.New()
 	
@@ -250,7 +193,6 @@ func (n *NFSInfo) copyOneFileChunk(offset uint64, num_bytes uint64, threadID int
 			if !(err == io.EOF && n_bytes == int(bytes_to_read)) {
 				fmt.Printf("Thread %d Error Read Error\n",threadID)
 				fmt.Printf("%s\n", err)
-				f_dst.Close()
 				return
 			}
 		}
@@ -261,8 +203,6 @@ func (n *NFSInfo) copyOneFileChunk(offset uint64, num_bytes uint64, threadID int
 		n_bytes_written, err := f_dst.Write(srcBuf[0:n_bytes])
 		thread_bytes_written += uint64(n_bytes_written)
 		bar.IncrBy(n_bytes_written)
-
-		
 
 		if err != nil {
 			fmt.Printf("Thread %d Error: write error!\n", threadID)
@@ -289,7 +229,6 @@ func (n *NFSInfo) copyOneFileChunk(offset uint64, num_bytes uint64, threadID int
 		}
 
 	}
-	f_dst.Close()
 	
 
 	n.hashes[threadID] = hasher.Sum([]byte{})

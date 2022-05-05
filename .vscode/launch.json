@@ -10,7 +10,7 @@
             "request": "launch",
             "mode": "debug",
             "program": "${workspaceFolder}",
-            "args": ["-threads", "2", "../junk6", "../junk1"]
+            "args": ["-threads", "2", "192.168.20.20:/data/junk1", "192.168.20.20:/data/junk1"]
         },
         {
             "name": "Benchmark Test",
