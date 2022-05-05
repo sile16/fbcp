@@ -18,9 +18,10 @@ func NewNFSBench(dst_ff *FlexFile, concurrency int,  nodes int, nodeID int, size
 	    hashes: make([][]byte, concurrency), sizeMB: sizeMB, nodeOffset: nodeOffset, 
 		verify: verify, zeros: zeros,}
 
-	if !nfsBench.dst_ff.exists || nfsBench.dst_ff.size != nfsBench.src_ff.size {
+	total_file_size := int64(nodes * concurrency * int(sizeMB) * 1024 * 1024)
+	if !nfsBench.dst_ff.exists || nfsBench.dst_ff.size != uint64(total_file_size) {
 		//truncate
-		dst_ff.Truncate(int64(nodes * concurrency * int(sizeMB) * 1024 * 1024))
+		dst_ff.Truncate(total_file_size)
 	}
 	
 	return nfsBench, nil
