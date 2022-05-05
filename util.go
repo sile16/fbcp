@@ -1,16 +1,17 @@
 package main
 
 import (
+	"errors"
 	"fmt"
+	"io"
 	"os"
+	"path/filepath"
 	"strings"
 	"sync"
-	"io"
-	"path/filepath"
-	"errors"
 
 	"github.com/joshuarobinson/go-nfs-client/nfs"
 	"github.com/joshuarobinson/go-nfs-client/nfs/rpc"
+
 )
 
 type NFSInfo struct {
@@ -58,13 +59,15 @@ type ReadWriteSeekerCloser interface {
 	io.Closer
 }
 
-func NewFlexFilePipe(*os.File) (*FlexFile, error) {
+func NewFlexFilePipe(pipe *os.File) (*FlexFile, error) {
 	ff := FlexFile{size: 0, exists: false, 
 		is_directory: false, 
-		is_pipe: false, is_nfs: false}
+		is_pipe: true, is_nfs: false, pipe: pipe, file_name: pipe.Name(),}
 
 	return &ff, nil
 }
+
+
 
 func NewFlexFile(file_path string ) (*FlexFile, error){
 	ff := FlexFile{size: 0, exists: false, is_directory: false, is_pipe: false}
@@ -141,10 +144,29 @@ func NewFlexFile(file_path string ) (*FlexFile, error){
 	}
 }
 
+func (ff *FlexFile) Truncate(size int64 ) {
+	if ff.is_nfs{
+		fmt.Print("truncating nfs")
+		// Try and mount to verify
+		nfs_f, err := ff.Open()
+		if err != nil {
+			fmt.Print("Error tyring to truncate file")
+		}
+		nfs_f.Seek(size - 1, io.SeekStart)
+		nfs_f.Write([]byte{0x0})
+		nfs_f.Close()
+
+	} else {
+		os.Truncate(ff.file_full_path, size)
+	}
+	
+}
+
 func (ff *FlexFile) Open() (ReadWriteSeekerCloser, error) {
 	// Open the File
 	if ff.is_pipe {
 		return ff.pipe, nil
+
 	} else if ff.is_nfs {
 		mount_dst, err := nfs.DialMount(ff.nfs_host, true)
 		if err != nil {

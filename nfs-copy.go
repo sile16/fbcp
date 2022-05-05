@@ -30,6 +30,11 @@ func NewNFSCopy(src_ff *FlexFile, dst_ff *FlexFile, concurrency int, nodes int, 
 		os.Exit(1)
 	}
 
+	if !nfsNFSCopy.dst_ff.exists || nfsNFSCopy.dst_ff.size != nfsNFSCopy.src_ff.size {
+		//truncate
+		dst_ff.Truncate(int64(src_ff.size))
+	}
+
 	/*
 	if nfsNFSCopy.nodeOffset == 0 && nfsNFSCopy.dst_ff.exists {
 		fmt.Println("Destination file already exists.")

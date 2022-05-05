@@ -108,7 +108,6 @@ func (n *NFSInfo) NFSProducer(dispatch <-chan ChannelMsg, ch chan<- ChannelMsg, 
 		fmt.Printf("error openeing source file %s ", n.src_ff.file_name)
 		panic(err)
 	}
-
 	
 	for msg := range dispatch {
 		nfs_f.Seek(int64(msg.offset), io.SeekStart)
@@ -207,7 +206,6 @@ func (n *NFSInfo) PipeConsumer(ch <-chan ChannelMsg, pool *sync.Pool, cwg *sync.
 
 	writer, _ := n.dst_ff.Open()
 
-
 	items := make(map[uint64] ChannelMsg)
 	//msg_count := 0
 
@@ -215,21 +213,27 @@ func (n *NFSInfo) PipeConsumer(ch <-chan ChannelMsg, pool *sync.Pool, cwg *sync.
 	for msg := range ch {
 		items[msg.offset] = msg
 
-		curr_msg, ok := items[offset]
-		if ok {
-			n_bytes, err := writer.Write(curr_msg.data[0:curr_msg.len])
-			if err != nil {
-				panic(err)
-			}
-			n.mu.Lock()
-			pool.Put(&curr_msg.data)
-			n.mu.Unlock()
+		for {
+			//keep looping through our stored messages if we have the next offset alread
+			curr_msg, ok := items[offset]
+			if ok {
+				n_bytes, err := writer.Write(curr_msg.data[0:curr_msg.len])
+				if err != nil {
+					panic(err)
+				}
+				n.mu.Lock()
+				pool.Put(&curr_msg.data)
+				n.mu.Unlock()
 
-			if uint64(n_bytes) != msg.len {
-				panic("Pipe consumer bytes written do not match bytes sent")
+				if uint64(n_bytes) != msg.len {
+					panic("Pipe consumer bytes written do not match bytes sent")
+				}
+				offset += uint64(n_bytes)
+				delete(items, offset)
+			} else {
+				// no more stored need to go back to the channel for next message
+				break
 			}
-			offset += uint64(n_bytes)
-			delete(items, offset)
 		}
 	}
 }

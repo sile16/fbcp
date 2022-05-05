@@ -155,8 +155,9 @@ func main() {
 	}
 
 	//  FIX THIS BACK FOR COPY to WORK
-	//if pipein || pipeout {
-	if true {
+	if pipein || pipeout {
+		//fmt.Printf("sourc: %t\n", src_ff.is_pipe)
+		//fmt.Printf("dest:  %t\n", dst_ff.is_pipe)
 		nfs, err := NewNFSStream(src_ff, dst_ff, threads)
 		if err != nil {
 			fmt.Println(err)
