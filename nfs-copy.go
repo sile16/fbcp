@@ -4,10 +4,10 @@ import (
 	"crypto/md5"
 	"fmt"
 	"io"
-	"log"
-	"os"
 	"sync/atomic"
 	"time"
+
+	log "github.com/sirupsen/logrus"
 
 	"github.com/vbauerster/mpb/v7"
 	"github.com/vbauerster/mpb/v7/decor"
@@ -21,8 +21,7 @@ func NewNFSCopy(src_ff *FlexFile, dst_ff *FlexFile, concurrency int, nodes int, 
 	    hashes: make([][]byte, concurrency), verify: verify, copyv2: copyv2}
 	
 	if !nfsNFSCopy.src_ff.exists {
-		fmt.Printf("Error: source fle %s doesn't exist", nfsNFSCopy.src_ff.file_name)
-		os.Exit(1)
+		log.Fatalf("Error: source fle %s doesn't exist", nfsNFSCopy.src_ff.file_name)
 	}
 
 	//todo; make it work on directories, right now we will be explicit
@@ -114,12 +113,12 @@ func (n *NFSInfo) SpreadCopy() (float64, []byte) {
 	
 
 	elapsed := time.Since(start)
-	total_bytes := atomic.LoadUint64(&n.atm_counter_bytes_written) / ( 1024 * 1024 )
+	total_mb_bytes := atomic.LoadUint64(&n.atm_counter_bytes_written) / ( 1024 * 1024 )
 	
 	//fmt.Printf("Written Data Hash: %x\n", hashValue )
-	fmt.Printf("Write Finished: Time: %f s , %d  MiB Transfered\n", elapsed.Seconds(), total_bytes)
+	fmt.Printf("Write Finished: Time: %f s , %d  MiB Transfered\n", elapsed.Seconds(), total_mb_bytes)
 	
-	return float64(total_bytes) / (float64(elapsed.Seconds())  ) , hashValue
+	return float64(total_mb_bytes) / (float64(elapsed.Seconds())  ) , hashValue
 }
 
 func (n *NFSInfo) copyOneFileChunk(offset uint64, num_bytes uint64, threadID int, bar *mpb.Bar) {
@@ -251,9 +250,6 @@ func (n *NFSInfo) copyOneFileChunkv2(offset uint64, num_bytes uint64, threadID i
 	defer f_dst.Close()
 	
 	hasher := md5.New()
-	
-	thread_bytes_written := uint64(0)
-	thread_bytes_read := uint64(0)
 
 	f_src.Seek(int64(offset), io.SeekStart)
 	f_dst.Seek(int64(offset), io.SeekStart)
@@ -262,10 +258,11 @@ func (n *NFSInfo) copyOneFileChunkv2(offset uint64, num_bytes uint64, threadID i
 	if err != nil {
 		log.Fatalf("Only Copied %d bytes in thread %d, at offset %d , Error: %s", bytes_written, threadID, offset, err)
 	}
+	log.Debugf(" Thread %d Wrote %d Bytes", threadID, bytes_written)
 	
 	n.hashes[threadID] = hasher.Sum([]byte{})
-	atomic.AddUint64(&n.atm_counter_bytes_read, thread_bytes_read)
+	atomic.AddUint64(&n.atm_counter_bytes_read, uint64(bytes_written))
 	
 	n.hashes[threadID] = hasher.Sum([]byte{})
-	atomic.AddUint64(&n.atm_counter_bytes_written, thread_bytes_written)
+	atomic.AddUint64(&n.atm_counter_bytes_written, uint64(bytes_written))
 }
