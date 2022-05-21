@@ -9,8 +9,10 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/joshuarobinson/go-nfs-client/nfs"
-	"github.com/joshuarobinson/go-nfs-client/nfs/rpc"
+	log "github.com/sirupsen/logrus"
+
+	"github.com/sile16/go-nfs-client/nfs"
+	"github.com/sile16/go-nfs-client/nfs/rpc"
 
 )
 
@@ -23,6 +25,7 @@ type NFSInfo struct {
 	nodeSize        uint64
 	verify          bool
 	zeros           bool
+	copyv2          bool
 
 	wg                        sync.WaitGroup
 	mu                        sync.Mutex
@@ -30,7 +33,6 @@ type NFSInfo struct {
 	atm_counter_bytes_written uint64
 	atm_counter_bytes_read    uint64
 	filesWritten              int
-	authUnix                  *rpc.AuthUnix
 	src_ff                     *FlexFile
 	dst_ff                     *FlexFile
 }
@@ -144,27 +146,52 @@ func NewFlexFile(file_path string ) (*FlexFile, error){
 	}
 }
 
-func (ff *FlexFile) Truncate(size int64 ) {
-	if ff.is_nfs{
-		fmt.Print("truncating nfs")
-		// Try and mount to verify
-		nfs_f, err := ff.Open()
+func (ff *FlexFile) Truncate(size int64 ) error {
+	if ff.pipe != nil {
+		return nil
+	} else if ff.is_nfs{
+
+		mount_dst, err := nfs.DialMount(ff.nfs_host, true)
 		if err != nil {
-			fmt.Print("Error tyring to truncate file")
+			fmt.Println("Portmapper failed.")
+			fmt.Println(err)
+			return err
 		}
-		nfs_f.Seek(size - 1, io.SeekStart)
-		nfs_f.Write([]byte{0x0})
-		nfs_f.Close()
+		defer mount_dst.Close()
+
+		hostname := getShortHostname()
+		user_id := os.Getuid()
+		group_id := os.Getgid()
+
+		auth := rpc.NewAuthUnix(hostname, uint32(user_id), uint32(group_id))
+		
+		target_dst, err := mount_dst.Mount(ff.export, auth.Auth(), true)
+		if err != nil {
+			fmt.Println("Unable to mount.")
+			fmt.Println(err)
+			mount_dst.Close()
+			return err
+		}
+		defer target_dst.Close()
+
+		log.Debugf("Truncating the NFS file, %s, to size: %d", ff.file_name, size)
+		_, err = target_dst.CreateTruncate(ff.file_name, os.FileMode(int(0644)), uint64(size))
+
+		if err != nil {
+			log.Errorf("Error tyring to truncate file")
+		}
+		return nil
+
 
 	} else {
-		os.Truncate(ff.file_full_path, size)
+		return os.Truncate(ff.file_full_path, size)
 	}
 	
 }
 
 func (ff *FlexFile) Open() (ReadWriteSeekerCloser, error) {
 	// Open the File
-	if ff.is_pipe {
+	if ff.pipe != nil {
 		return ff.pipe, nil
 
 	} else if ff.is_nfs {

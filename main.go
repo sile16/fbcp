@@ -7,6 +7,8 @@ import (
 	"os"
 	"bytes"
 	"runtime"
+	"runtime/pprof"
+	log "github.com/sirupsen/logrus"
 
 	//"github.com/vbauerster/mpb/v7"
 	//"github.com/vbauerster/mpb/v7/decor"
@@ -24,6 +26,11 @@ func main() {
 	benchmarkPtr := flag.Bool("benchmark", false, "Run a benchmark against a single file.")
 	zerosPtr := flag.Bool("zeros", false, "Benchmark Uses zeros instead of random data")
 	readonlyPtr := flag.Bool("readonly", false, "Only read a file for the benchmark")
+	verbosePtr := flag.Bool("verbose", false, "Turn on Verbose logging")
+	forceInputStreamPtr := flag.Bool("force-input-stream", false, "Treat input file like a stream.")
+	forceOutputStreamPtr := flag.Bool("force-output-stream", false, "Treat output file like a stream.")
+	profile := flag.String("profile", "", "write cpu profile to specified file")
+	copyv2 := flag.Bool("copyv2", false, "Use the io.copyN impklementiontation")
 
 	flag.Parse()
 
@@ -35,6 +42,25 @@ func main() {
 	verify := *verifyPtr
 	zeros := *zerosPtr
 	readOnly := *readonlyPtr
+	verbose := *verbosePtr
+	forceInputStream := *forceInputStreamPtr
+	forceOutputStream := *forceOutputStreamPtr
+
+	if *profile != "" {
+        f, err := os.Create(*profile)
+        if err != nil {
+            log.Fatal(err)
+        }
+		runtime.SetBlockProfileRate(1)
+        pprof.StartCPUProfile(f)
+        defer pprof.StopCPUProfile()
+    }
+
+	if verbose{ 
+		log.SetLevel(log.DebugLevel)
+	} else {
+		log.SetLevel(log.InfoLevel)
+	}
 
 	pi, _ := os.Stdin.Stat() // get the FileInfo struct describing the standard input.
 	po, _ := os.Stdout.Stat() // get the FileInfo struct describing the standard input.
@@ -42,15 +68,15 @@ func main() {
 	pipein, pipeout := false, false
 
 	if (pi.Mode() & os.ModeNamedPipe) != 0 {
-		//fmt.Println("data is from pipe")
+		log.Debug("Data in is from pipe")
 		pipein = true
 	} 
 	if (po.Mode() & os.ModeNamedPipe) != 0 {
-		//fmt.Println("data out is going to the pipe")
+		log.Debug("Data out is to a pipe")
 		pipeout = true
 	}
 	
-	// Flex file allows us to use a NFS path/ local file or a Pipe transparentyly.
+	// Flex file allows us to use a NFS path / local file or a Pipe transparentyly.
 	var src_ff *FlexFile
 	var dst_ff *FlexFile
 	var err error
@@ -59,13 +85,11 @@ func main() {
 		// Benchmark, uses random data, or zeros to write to a file and read it back.
 		if flag.NArg() !=1 {
 			flag.Usage()
-			fmt.Print("Please provide a single test file.")
-			os.Exit(0)
+			log.Fatal("Please provide a single test file.")
 		}
 		dst_ff, err = NewFlexFile(flag.Args()[0])
 		if err != nil {
-			fmt.Printf("Error opening destination file, %s", err)
-			os.Exit(1)
+			log.Fatalf("Error opening destination file, %s", err)
 		}
 
 		coreCount := runtime.NumCPU()
@@ -75,7 +99,7 @@ func main() {
 		}
 
 		if threads < coreCount * 2 {
-			fmt.Printf("Recommend 2 threads / core, currently %d", threads )
+			log.Warningf("Recommend 2 threads / core, currently %d", threads )
 		}
 
 		nfs_bench, _ := NewNFSBench(dst_ff, threads, nodes, nodeID, uint64(sizeMB), verify, zeros)
@@ -83,27 +107,25 @@ func main() {
 		var write_bytes_per_sec float64
 		var hashValueWrite []byte
 		if !readOnly{
-			fmt.Println("Running NFS write test.")
+			log.Info("Running NFS write test.")
 			write_bytes_per_sec, hashValueWrite = nfs_bench.WriteTest()
 		}
-		
 		
 
 		fmt.Println("Running NFS read test.")
 		read_bytes_per_sec, hashValueRead := nfs_bench.ReadTest()
 		if !readOnly{
-			fmt.Printf("Write Throughput = %f MiB/s\n", write_bytes_per_sec)
+			log.Info("Write Throughput = %f MiB/s\n", write_bytes_per_sec)
 		}
 		
-		fmt.Printf("Read Throughput = %f MiB/s\n", read_bytes_per_sec)
+		log.Info("Read Throughput = %f MiB/s\n", read_bytes_per_sec)
 
 		if verify {
-			
-			fmt.Printf("   Read Data Hash: %x\n", hashValueRead )
+			log.Infof("   Read Data Hash: %x\n", hashValueRead )
 			if !readOnly{
-				fmt.Printf("Written Data Hash: %x\n", hashValueWrite )
+				log.Infof("Written Data Hash: %x\n", hashValueWrite )
 				if !bytes.Equal(hashValueRead, hashValueWrite) {
-					fmt.Println("Error Error bad DATA !!!!!!!!!!!! ")
+					log.Error("Error Error bad DATA !!!!!!!!!!!! ")
 				}
 			}
 		}
@@ -116,26 +138,22 @@ func main() {
 		src_ff, _ = NewFlexFilePipe(os.Stdin)
 		dst_ff, err = NewFlexFile(flag.Args()[0])
 		if err != nil {
-			fmt.Printf("Error opening destination file, %s", err)
-			os.Exit(1)
+			log.Fatalf("Error opening destination file, %s", err)
 		}
 	} else if !pipein && pipeout && flag.NArg() == 1 {
 		src_ff, err = NewFlexFile(flag.Args()[0])
 		if err != nil {
-			fmt.Printf("Error opening source file, %s", err)
-			os.Exit(1)
+			log.Fatalf("Error opening source file, %s", err)
 		}
 		dst_ff, _ = NewFlexFilePipe(os.Stdout)
 	} else if !pipein && !pipeout && flag.NArg() == 2 {
 		src_ff, err = NewFlexFile(flag.Args()[0])
 		if err != nil {
-			fmt.Printf("Error opening source file, %s", err)
-			os.Exit(1)
+			log.Fatalf("Error opening source file, %s", err)
 		}
 		dst_ff, err = NewFlexFile(flag.Args()[1])
 		if err != nil {
-			fmt.Printf("Error opening destination file, %s", err)
-			os.Exit(1)
+			log.Fatalf("Error opening destination file, %s", err)
 		}
 	} else if pipein && pipeout && flag.NArg() == 0 {
 		src_ff, _ = NewFlexFilePipe(os.Stdin)
@@ -145,8 +163,18 @@ func main() {
 		os.Exit(1)
 	}
 
+	if forceInputStream {
+		src_ff.is_pipe = true
+		pipein = true
+	}
+
+	if forceOutputStream {
+		dst_ff.is_pipe = true
+		pipeout = true
+	}
+
 	if nodes > 1 && threads == 0{
-		fmt.Printf("Missing threads param, required when using more than 1 node")
+		log.Fatal("Missing threads param, required when using more than 1 node")
 		return
 	}	
 
@@ -155,23 +183,23 @@ func main() {
 	}
 
 	if pipein || pipeout {
-		//fmt.Printf("sourc: %t\n", src_ff.is_pipe)
-		//fmt.Printf("dest:  %t\n", dst_ff.is_pipe)
+		log.Debugf("sourc: %t\n", src_ff.is_pipe)
+		log.Debugf("dest:  %t\n", dst_ff.is_pipe)
 		nfs, err := NewNFSStream(src_ff, dst_ff, threads)
 		if err != nil {
 			fmt.Println(err)
 			return
 		}
+		log.Info("Running a Stream Copy.")
 		nfs.Stream()
 	} else {
-		nfs, err := NewNFSCopy(src_ff, dst_ff, threads, nodes, nodeID, verify)
+		nfs, err := NewNFSCopy(src_ff, dst_ff, threads, nodes, nodeID, verify, *copyv2)
 
 		if err != nil {
-			fmt.Println(err)
-			return
+			log.Fatal(err)
 		}
 
-		fmt.Println("Running NFS MultiCopy.")
+		log.Info("Running NFS MultiCopy.")
 		copy_bytes_per_sec, hashValueWrite := nfs.SpreadCopy()
 		fmt.Printf("Write Throughput = %f MiB/s\n", copy_bytes_per_sec)
 		if verify {

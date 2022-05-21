@@ -3,7 +3,8 @@ module github.com/sile16/fbcp
 go 1.18
 
 require (
-	github.com/joshuarobinson/go-nfs-client v0.0.0-20210601084052-861a3a51531e
+	github.com/sile16/go-nfs-client v0.0.0-20220520224412-aeac54ef9303
+	github.com/sirupsen/logrus v1.8.1
 	github.com/vbauerster/mpb/v7 v7.4.1
 )
 
