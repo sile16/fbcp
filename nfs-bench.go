@@ -2,12 +2,13 @@ package main
 
 import (
 	"bytes"
-	"crypto/md5"
 	"fmt"
 	"io"
 	"math/rand"
 	"sync/atomic"
 	"time"
+
+	xxh3 "github.com/zeebo/xxh3"
 )
 
 func NewNFSBench(dst_ff *FlexFile, concurrency int, nodes int, nodeID int, sizeMB uint64, verify bool, zeros bool) (*NFSInfo, error) {
@@ -18,11 +19,11 @@ func NewNFSBench(dst_ff *FlexFile, concurrency int, nodes int, nodeID int, sizeM
 		hashes: make([][]byte, concurrency), sizeMB: sizeMB, nodeOffset: nodeOffset,
 		verify: verify, zeros: zeros}
 
-    //total_file_size := int64(nodes * concurrency * int(sizeMB) * 1024 * 1024)
-	//if !nfsBench.dst_ff.exists || nfsBench.dst_ff.size != uint64(total_file_size) {
+    total_file_size := int64(nodes * concurrency * int(sizeMB) * 1024 * 1024)
+	if !nfsBench.dst_ff.exists || nfsBench.dst_ff.size != uint64(total_file_size) {
 	//truncate
-	//	dst_ff.Truncate(total_file_size)
-	//}
+		dst_ff.Truncate(total_file_size)
+	}
 
 	return nfsBench, nil
 }
@@ -31,7 +32,6 @@ func (n *NFSInfo) WriteTest() (float64, []byte) {
 	atomic.StoreUint64(&n.atm_counter_bytes_written, 0)
 
 	start := time.Now()
-
 	offset := uint64(0)
 
 	for i := 0; i < n.concurrency; i++ {
@@ -42,7 +42,7 @@ func (n *NFSInfo) WriteTest() (float64, []byte) {
 	n.wg.Wait()
 	elapsed := time.Since(start)
 
-	hasher := md5.New()
+	hasher := xxh3.New()
 	for i := 0; i < len(n.hashes); i++ {
 		hasher.Write(n.hashes[i])
 	}
@@ -70,7 +70,7 @@ func (n *NFSInfo) writeOneFileChunk(offset uint64, threadID int) {
 	}
 	defer f.Close()
 
-	hasher := md5.New()
+	hasher := xxh3.New()
 
 	var bytes_written uint64
 	bytes_written = 0
@@ -100,16 +100,8 @@ func (n *NFSInfo) writeOneFileChunk(offset uint64, threadID int) {
 			fmt.Print("Wrote more bytes than expected.")
 			break
 		}
-
-		//if i == n.sizeMB / 2 {
-		//	fmt.Printf("Thread Write %d - Chunk 50%% \n", threadID)
-		//}
 	}
 	fmt.Printf("Thread Write %d - Done !!!!!! \n", threadID)
-
-	// calculate hash out of the write latency path
-	//var hash_written int
-	//hash_written = 0
 
 	// this relies on a 1MB buffer
 	if n.verify {
@@ -137,7 +129,7 @@ func (n *NFSInfo) ReadTest() (float64, []byte) {
 
 	n.wg.Wait()
 
-	hasher := md5.New()
+	hasher := xxh3.New()
 
 	for i := 0; i < len(n.hashes); i++ {
 		hasher.Write(n.hashes[i])
@@ -153,7 +145,7 @@ func (n *NFSInfo) ReadTest() (float64, []byte) {
 func (n *NFSInfo) readOneFileChunk(offset uint64, threadID int) {
 	defer n.wg.Done()
 
-	hasher := md5.New()
+	hasher := xxh3.New()
 	var hash_buff []byte
 	if n.verify {
 		hash_buff = make([]byte, 1024*1024)

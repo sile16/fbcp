@@ -1,13 +1,13 @@
 package main
 
 import (
-	"crypto/md5"
 	"fmt"
 	"io"
 	"sync/atomic"
 	"time"
 
 	log "github.com/sirupsen/logrus"
+	xxh3 "github.com/zeebo/xxh3"
 
 	"github.com/vbauerster/mpb/v7"
 	"github.com/vbauerster/mpb/v7/decor"
@@ -105,7 +105,8 @@ func (n *NFSInfo) SpreadCopy() (float64, []byte) {
 	}
 	n.wg.Wait()
 	
-	hasher := md5.New()
+	//hasher := md5.New()
+	hasher := xxh3.New()
 	for  i :=  0 ; i < len(n.hashes); i++ {
 		hasher.Write(n.hashes[i])
 	}
@@ -132,7 +133,6 @@ func (n *NFSInfo) copyOneFileChunk(offset uint64, num_bytes uint64, threadID int
 	var err error = nil
 
 	// Open the source file.
-
 	f_src, err = n.src_ff.Open()
 	if err != nil {
 		fmt.Print("Error opening source file.")
@@ -151,7 +151,8 @@ func (n *NFSInfo) copyOneFileChunk(offset uint64, num_bytes uint64, threadID int
 
 	srcBuf := make([]byte,1*1024*1024)
 
-	hasher := md5.New()
+	//hasher := md5.New()
+	hasher := xxh3.New()
 	
 	thread_bytes_written := uint64(0)
 	thread_bytes_read := uint64(0)
@@ -249,7 +250,7 @@ func (n *NFSInfo) copyOneFileChunkv2(offset uint64, num_bytes uint64, threadID i
 	}
 	defer f_dst.Close()
 	
-	hasher := md5.New()
+	hasher := xxh3.New()
 
 	f_src.Seek(int64(offset), io.SeekStart)
 	f_dst.Seek(int64(offset), io.SeekStart)

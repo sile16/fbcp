@@ -10,7 +10,15 @@
             "request": "launch",
             "mode": "debug",
             "program": "${workspaceFolder}",
-            "args": ["-threads", "2", "192.168.20.20:/data/junk1", "192.168.20.20:/data/junk1"]
+            "args": ["-threads", "5","-sizeMB", "32", "-verbose", "../large", "../large3"]
+        },
+        {
+            "name": "Remote Spread Copy",
+            "type": "go",
+            "request": "launch",
+            "mode": "debug",
+            "program": "${workspaceFolder}",
+            "args": ["-threads", "2", "192.168.20.20:/data/oddball1", "192.168.20.20:/data/m2"]
         },
         {
             "name": "Benchmark Test",
@@ -19,6 +27,39 @@
             "mode": "debug",
             "program": "${workspaceFolder}",
             "args": [ "-threads", "1", "-sizeMB", "16", "-benchmark", "-verify","192.168.20.20:/data/junk1"]
+        },
+        {
+            "name": "Stream Test - StreamIN",
+            "type": "go",
+            "request": "launch",
+            "mode": "debug",
+            "program": "${workspaceFolder}",
+            "args": [ "-threads", "3", "-force-input-stream", "-verbose", "-verify", "../junk1", "../junk2"]
+        }
+        ,
+        {
+            "name": "Stream Test - StreamOut",
+            "type": "go",
+            "request": "launch",
+            "mode": "debug",
+            "program": "${workspaceFolder}",
+            "args": [ "-threads", "3", "-force-output-stream", "-verbose", "-verify", "../junk1", "../junk2"]
+        },
+        {
+            "name": "Stream Test Local ",
+            "type": "go",
+            "request": "launch",
+            "mode": "debug",
+            "program": "${workspaceFolder}",
+            "args": [ "-threads", "3", "-stream", "-verbose", "../junk1", "../junk8"]
+        },
+        {
+            "name": "Stream Test Local Pliad ",
+            "type": "go",
+            "request": "launch",
+            "mode": "debug",
+            "program": "${workspaceFolder}",
+            "args": [ "-threads", "3", "-stream", "-verbose", "../junk1", "../junk9"]
         }
     ]
 }

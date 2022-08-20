@@ -26,9 +26,9 @@ type NFSInfo struct {
 	verify          bool
 	zeros           bool
 	copyv2          bool
+	plaid           bool
 
 	wg                        sync.WaitGroup
-	mu                        sync.Mutex
 	atm_finished              int32
 	atm_counter_bytes_written uint64
 	atm_counter_bytes_read    uint64

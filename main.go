@@ -9,9 +9,6 @@ import (
 	"runtime"
 	"runtime/pprof"
 	log "github.com/sirupsen/logrus"
-
-	//"github.com/vbauerster/mpb/v7"
-	//"github.com/vbauerster/mpb/v7/decor"
 )
 
 
@@ -31,6 +28,8 @@ func main() {
 	forceOutputStreamPtr := flag.Bool("force-output-stream", false, "Treat output file like a stream.")
 	profile := flag.String("profile", "", "write cpu profile to specified file")
 	copyv2 := flag.Bool("copyv2", false, "Use the io.copyN impklementiontation")
+	stream := flag.Bool("stream", false, "Use the stream implementation")
+	plaid := flag.Bool("plaid", false, "use plaid copy stream")
 
 	flag.Parse()
 
@@ -82,7 +81,10 @@ func main() {
 	var err error
 
 	if benchmark{
-		// Benchmark, uses random data, or zeros to write to a file and read it back.
+		//
+		
+		
+		Benchmark, uses random data, or zeros to write to a file and read it back.
 		if flag.NArg() !=1 {
 			flag.Usage()
 			log.Fatal("Please provide a single test file.")
@@ -115,10 +117,10 @@ func main() {
 		fmt.Println("Running NFS read test.")
 		read_bytes_per_sec, hashValueRead := nfs_bench.ReadTest()
 		if !readOnly{
-			log.Info("Write Throughput = %f MiB/s\n", write_bytes_per_sec)
+			log.Infof("Write Throughput = %f MiB/s\n", write_bytes_per_sec)
 		}
 		
-		log.Info("Read Throughput = %f MiB/s\n", read_bytes_per_sec)
+		log.Infof("Read Throughput = %f MiB/s\n", read_bytes_per_sec)
 
 		if verify {
 			log.Infof("   Read Data Hash: %x\n", hashValueRead )
@@ -163,11 +165,13 @@ func main() {
 		os.Exit(1)
 	}
 
+	// this will use the code like it's reading from stdin
 	if forceInputStream {
 		src_ff.is_pipe = true
 		pipein = true
 	}
 
+	// this will use the code like it's writing to stdout
 	if forceOutputStream {
 		dst_ff.is_pipe = true
 		pipeout = true
@@ -182,10 +186,10 @@ func main() {
 		threads = 16
 	}
 
-	if pipein || pipeout {
+	if pipein || pipeout || *stream {
 		log.Debugf("sourc: %t\n", src_ff.is_pipe)
 		log.Debugf("dest:  %t\n", dst_ff.is_pipe)
-		nfs, err := NewNFSStream(src_ff, dst_ff, threads)
+		nfs, err := NewNFSStream(src_ff, dst_ff, threads, *plaid)
 		if err != nil {
 			fmt.Println(err)
 			return
