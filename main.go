@@ -2,25 +2,28 @@ package main
 
 import (
 	//"bytes"
+	"bytes"
 	"flag"
 	"fmt"
 	"os"
-	"bytes"
 	"runtime"
+	//"runtime/debug"
 	"runtime/pprof"
+
 	log "github.com/sirupsen/logrus"
 )
 
 
 func main() {
 
+	benchmarkPtr := flag.Bool("benchmark", false, "Run a benchmark against a single file.")
+	hashPtr := flag.Bool("hash", false, "This will only hash a file, sizeMB & threads are required.")
+
 	nodesPtr := flag.Int("nodes",1, "Total number of nodes running to split workload across machines" )
 	nodeIDPtr := flag.Int("node",0, "node ID number, 0 Indexed." )
 	sizeMBPtr := flag.Int64("sizeMB", 128, "Number MB generated per thread during benchmark")
 	threadsPtr := flag.Int("threads", 0, "Number of concurrent threads default is core count * 2")
 	verifyPtr := flag.Bool("verify", false, "re-read data to calculate hashes to verify data trasnfer integrity.")
-	//verbosePtr := flag.Bool("v", false, "Verbose output")
-	benchmarkPtr := flag.Bool("benchmark", false, "Run a benchmark against a single file.")
 	zerosPtr := flag.Bool("zeros", false, "Benchmark Uses zeros instead of random data")
 	readonlyPtr := flag.Bool("readonly", false, "Only read a file for the benchmark")
 	verbosePtr := flag.Bool("verbose", false, "Turn on Verbose logging")
@@ -44,6 +47,7 @@ func main() {
 	verbose := *verbosePtr
 	forceInputStream := *forceInputStreamPtr
 	forceOutputStream := *forceOutputStreamPtr
+	hash := *hashPtr
 
 	if *profile != "" {
         f, err := os.Create(*profile)
@@ -81,10 +85,7 @@ func main() {
 	var err error
 
 	if benchmark{
-		//
-		
-		
-		Benchmark, uses random data, or zeros to write to a file and read it back.
+		// Benchmark, uses random data, or zeros to write to a file and read it back.
 		if flag.NArg() !=1 {
 			flag.Usage()
 			log.Fatal("Please provide a single test file.")
@@ -104,6 +105,7 @@ func main() {
 			log.Warningf("Recommend 2 threads / core, currently %d", threads )
 		}
 
+		log.Debug("Launching NFS Bench")
 		nfs_bench, _ := NewNFSBench(dst_ff, threads, nodes, nodeID, uint64(sizeMB), verify, zeros)
 
 		var write_bytes_per_sec float64
@@ -134,6 +136,34 @@ func main() {
 
 		os.Exit(0)
 	}
+
+	if hash {
+		//Same checks as benchamrk , single file check.
+		if flag.NArg() !=1 {
+			flag.Usage()
+			log.Fatal("Please provide a single test file.")
+		}
+
+		if threads == 0 {
+			log.Fatalf("Threads must be specified for a correct hash.")
+		}
+
+		nfs, err := NewSpreadHash(src_ff, threads, nodes, nodeID)
+		if err != nil {
+			log.Fatal(err)
+		}
+
+		copy_bytes_per_sec, hashValueWrite := nfs.SpreadHash()
+		fmt.Printf("Write Throughput = %f MiB/s\n", copy_bytes_per_sec)
+		if verify {
+			fmt.Printf("Spread Hash Threads: %d, Hash Node %d of %d ", threads, nodeID, nodes)
+			fmt.Printf("       Hash: %x\n", hashValueWrite )
+			
+		}
+		os.Exit(0)
+	}
+
+
 	
 
 	if pipein && !pipeout && flag.NArg() == 1 {
@@ -167,12 +197,14 @@ func main() {
 
 	// this will use the code like it's reading from stdin
 	if forceInputStream {
+		log.Debug("Forcing input to streaming")
 		src_ff.is_pipe = true
 		pipein = true
 	}
 
 	// this will use the code like it's writing to stdout
 	if forceOutputStream {
+		log.Debug("Forcing output to streaming")
 		dst_ff.is_pipe = true
 		pipeout = true
 	}
@@ -207,7 +239,9 @@ func main() {
 		copy_bytes_per_sec, hashValueWrite := nfs.SpreadCopy()
 		fmt.Printf("Write Throughput = %f MiB/s\n", copy_bytes_per_sec)
 		if verify {
-			fmt.Printf("Written Data Hash: %x\n", hashValueWrite )
+			fmt.Printf("Spread Hash Threads: %d, Hash Node %d of %d ", threads, nodeID, nodes)
+			fmt.Printf("       Hash: %x\n", hashValueWrite )
+			
 		}
 	}
 }

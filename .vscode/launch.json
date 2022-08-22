@@ -10,15 +10,31 @@
             "request": "launch",
             "mode": "debug",
             "program": "${workspaceFolder}",
-            "args": ["-threads", "5","-sizeMB", "32", "-verbose", "../large", "../large3"]
+            "args": ["-threads", "5","-sizeMB", "32", "-verbose","../junk1", "../junk2"]
         },
         {
-            "name": "Remote Spread Copy",
+            "name": "Local Spread Copy copyv2",
             "type": "go",
             "request": "launch",
             "mode": "debug",
             "program": "${workspaceFolder}",
-            "args": ["-threads", "2", "192.168.20.20:/data/oddball1", "192.168.20.20:/data/m2"]
+            "args": ["-threads", "5","-copyv2","-sizeMB", "32", "-verify", "-verbose", "../junk1", "../junk2", ]
+        },
+        {
+            "name": "Local to Remote Spread Copy",
+            "type": "go",
+            "request": "launch",
+            "mode": "debug",
+            "program": "${workspaceFolder}",
+            "args": ["-threads", "5",  "-verbose", "../junk1", "127.0.0.1:/Volumes/RAMDisk/junk2",]
+        },
+        {
+            "name": "Remote to Local Spread Copy",
+            "type": "go",
+            "request": "launch",
+            "mode": "debug",
+            "program": "${workspaceFolder}",
+            "args": ["-threads", "5", "-verbose", "-verify", "127.0.0.1:/Volumes/RAMDisk/junk1", "/dev/null", ]
         },
         {
             "name": "Benchmark Test",
@@ -26,7 +42,7 @@
             "request": "launch",
             "mode": "debug",
             "program": "${workspaceFolder}",
-            "args": [ "-threads", "1", "-sizeMB", "16", "-benchmark", "-verify","192.168.20.20:/data/junk1"]
+            "args": [ "-threads", "1", "-sizeMB", "16", "-benchmark", "-verify","192.168.20.20:/data/junk1", "-verbose"]
         },
         {
             "name": "Stream Test - StreamIN",
@@ -46,12 +62,12 @@
             "args": [ "-threads", "3", "-force-output-stream", "-verbose", "-verify", "../junk1", "../junk2"]
         },
         {
-            "name": "Stream Test Local ",
+            "name": "Stream Test stream plaid ",
             "type": "go",
             "request": "launch",
             "mode": "debug",
             "program": "${workspaceFolder}",
-            "args": [ "-threads", "3", "-stream", "-verbose", "../junk1", "../junk8"]
+            "args": [ "-threads", "3", "-stream", "-verbose","-verify", "../junk1", "../junk8"]
         },
         {
             "name": "Stream Test Local Pliad ",

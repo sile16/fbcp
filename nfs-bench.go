@@ -51,7 +51,7 @@ func (n *NFSInfo) WriteTest() (float64, []byte) {
 	total_bytes := atomic.LoadUint64(&n.atm_counter_bytes_written) / (1024 * 1024)
 
 	fmt.Printf("Write Finished: Time: %f s , %d  MiB Transfered\n", elapsed.Seconds(), total_bytes)
-	fmt.Printf("Written Data Hash: %x\n", hashValue)
+	fmt.Printf("Written Data Hash: %x\n  ", hashValue)
 
 	return float64(total_bytes) / (float64(elapsed.Seconds())), hashValue
 }

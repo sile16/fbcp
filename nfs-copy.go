@@ -105,7 +105,6 @@ func (n *NFSInfo) SpreadCopy() (float64, []byte) {
 	}
 	n.wg.Wait()
 	
-	//hasher := md5.New()
 	hasher := xxh3.New()
 	for  i :=  0 ; i < len(n.hashes); i++ {
 		hasher.Write(n.hashes[i])
@@ -116,7 +115,6 @@ func (n *NFSInfo) SpreadCopy() (float64, []byte) {
 	elapsed := time.Since(start)
 	total_mb_bytes := atomic.LoadUint64(&n.atm_counter_bytes_written) / ( 1024 * 1024 )
 	
-	//fmt.Printf("Written Data Hash: %x\n", hashValue )
 	fmt.Printf("Write Finished: Time: %f s , %d  MiB Transfered\n", elapsed.Seconds(), total_mb_bytes)
 	
 	return float64(total_mb_bytes) / (float64(elapsed.Seconds())  ) , hashValue
