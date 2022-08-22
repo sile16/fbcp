@@ -27,6 +27,7 @@ type NFSInfo struct {
 	zeros           bool
 	copyv2          bool
 	plaid           bool
+	progress        bool
 
 	wg                        sync.WaitGroup
 	atm_finished              int32

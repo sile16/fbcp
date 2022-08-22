@@ -39,8 +39,6 @@ func NewNFSCopy(src_ff *FlexFile, dst_ff *FlexFile, concurrency int, nodes int, 
 	min_thread_size  := uint64(32) * 1024 * 1024
 
 	bytes_per_thread := nfsNFSCopy.src_ff.size / uint64( nodes * concurrency)
-	remainder_per_thread :=  bytes_per_thread % min_thread_size
-	bytes_per_thread += min_thread_size - remainder_per_thread
 
 	if bytes_per_thread < min_thread_size{
 		bytes_per_thread = min_thread_size

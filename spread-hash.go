@@ -13,24 +13,29 @@ import (
 	"github.com/vbauerster/mpb/v7/decor"
 )
 
-func NewSpreadHash(src_ff *FlexFile, concurrency int, nodes int, nodeID int ) (*NFSInfo, error) {
+func NewSpreadHash(src_ff *FlexFile, concurrency int, nodes int, nodeID int, progress bool ) (*NFSInfo, error) {
 
 	nfsHash := &NFSInfo{
 		src_ff: src_ff, 
 		concurrency: concurrency, 
-	    hashes: make([][]byte, concurrency) }
+	    hashes: make([][]byte, concurrency),
+	    progress: progress }
 	
 	if !nfsHash.src_ff.exists {
 		log.Fatalf("Error: source fle %s doesn't exist", nfsHash.src_ff.file_name)
 	}
 
 	// min each thread will get minimum of 32 MB of data
-	min_thread_size  := uint64(32) * 1024 * 1024
+	
 
 	bytes_per_thread := nfsHash.src_ff.size / uint64( nodes * concurrency)
-	remainder_per_thread :=  bytes_per_thread % min_thread_size
-	bytes_per_thread += min_thread_size - remainder_per_thread
 
+	//remainder_per_thread :=  bytes_per_thread % min_thread_size
+	//bytes_per_thread += min_thread_size - remainder_per_thread
+	//replaced above with the below if statement.
+	
+	//Why do we even have a minimum ? Only problem I see is if file is smaller 
+	//than the thread count 
 	if bytes_per_thread < min_thread_size{
 		bytes_per_thread = min_thread_size
 	}
@@ -47,11 +52,14 @@ func (n *NFSInfo) SpreadHash() (float64, []byte) {
 	atomic.StoreInt32(&n.atm_finished, 0)
 	atomic.StoreUint64(&n.atm_counter_bytes_written, 0)
 	
-	p := mpb.New(
-		mpb.WithWaitGroup(&n.wg),
-	    mpb.WithWidth(60),
-		mpb.WithRefreshRate(1000*time.Millisecond),
-	)
+	var p *mpb.Progress
+	if n.progress {
+		p = mpb.New(
+			mpb.WithWaitGroup(&n.wg),
+			mpb.WithWidth(60),
+			mpb.WithRefreshRate(1000*time.Millisecond),
+		)
+	}
 	
 	start := time.Now()
 
@@ -72,7 +80,9 @@ func (n *NFSInfo) SpreadHash() (float64, []byte) {
 
 		name := fmt.Sprintf("Thread#%d:", i)
 
-		bar := p.AddBar(int64(max_bytes_to_read),
+		var bar *mpb.Bar
+		if n.progress{
+			bar = p.AddBar(int64(max_bytes_to_read),
 					mpb.PrependDecorators(
 						decor.Name(name),
 						decor.CountersKibiByte("% .1f / % .1f"),
@@ -83,6 +93,7 @@ func (n *NFSInfo) SpreadHash() (float64, []byte) {
 						decor.EwmaSpeed(decor.UnitKiB, "% .1f", 60),
 					),
 				)
+		}
 		n.wg.Add(1)
 		go n.hashOneFileChunk(offset, max_bytes_to_read, i, bar)
 		offset += n.sizeMB
@@ -97,9 +108,9 @@ func (n *NFSInfo) SpreadHash() (float64, []byte) {
 	
 
 	elapsed := time.Since(start)
-	total_mb_bytes := atomic.LoadUint64(&n.atm_counter_bytes_written) / ( 1024 * 1024 )
+	total_mb_bytes := atomic.LoadUint64(&n.atm_counter_bytes_read) / ( 1024 * 1024 )
 	
-	fmt.Printf("Write Finished: Time: %f s , %d  MiB Transfered\n", elapsed.Seconds(), total_mb_bytes)
+	//fmt.Printf("Hash Finished: Time: %f s , %d  MiB Transfered\n", elapsed.Seconds(), total_mb_bytes)
 	
 	return float64(total_mb_bytes) / (float64(elapsed.Seconds())  ) , hashValue
 }
@@ -154,6 +165,12 @@ func (n *NFSInfo) hashOneFileChunk(offset uint64, num_bytes uint64, threadID int
 		}
 		
 		hasher.Write(srcBuf[0:n_bytes])
+
+		if thread_bytes_read == max_bytes_to_read {
+			break
+		} else if thread_bytes_read > max_bytes_to_read {
+			log.Fatal("More bytes read than expected.")
+		}
 	}
 	
 	n.hashes[threadID] = hasher.Sum([]byte{})

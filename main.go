@@ -13,6 +13,8 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
+const min_thread_size uint64 = uint64(16) * 1024 * 1024
+
 
 func main() {
 
@@ -20,7 +22,7 @@ func main() {
 	hashPtr := flag.Bool("hash", false, "This will only hash a file, sizeMB & threads are required.")
 
 	nodesPtr := flag.Int("nodes",1, "Total number of nodes running to split workload across machines" )
-	nodeIDPtr := flag.Int("node",0, "node ID number, 0 Indexed." )
+	nodeIDPtr := flag.Int("node",1, "node ID number, first node starts at 1." )
 	sizeMBPtr := flag.Int64("sizeMB", 128, "Number MB generated per thread during benchmark")
 	threadsPtr := flag.Int("threads", 0, "Number of concurrent threads default is core count * 2")
 	verifyPtr := flag.Bool("verify", false, "re-read data to calculate hashes to verify data trasnfer integrity.")
@@ -33,11 +35,12 @@ func main() {
 	copyv2 := flag.Bool("copyv2", false, "Use the io.copyN impklementiontation")
 	stream := flag.Bool("stream", false, "Use the stream implementation")
 	plaid := flag.Bool("plaid", false, "use plaid copy stream")
+	progressPtr := flag.Bool("progress", false, "Show progress bars")
 
 	flag.Parse()
 
 	nodes := *nodesPtr
-	nodeID := *nodeIDPtr
+	nodeID := *nodeIDPtr - 1
 	sizeMB := *sizeMBPtr
 	threads := *threadsPtr
 	benchmark := *benchmarkPtr
@@ -48,6 +51,7 @@ func main() {
 	forceInputStream := *forceInputStreamPtr
 	forceOutputStream := *forceOutputStreamPtr
 	hash := *hashPtr
+	
 
 	if *profile != "" {
         f, err := os.Create(*profile)
@@ -79,6 +83,14 @@ func main() {
 		pipeout = true
 	}
 	
+
+	coreCount := runtime.NumCPU()
+	if threads == 0 {
+		fmt.Printf("Found %d cores\n", coreCount)
+		threads = coreCount * 2
+	}
+
+	
 	// Flex file allows us to use a NFS path / local file or a Pipe transparentyly.
 	var src_ff *FlexFile
 	var dst_ff *FlexFile
@@ -95,14 +107,8 @@ func main() {
 			log.Fatalf("Error opening destination file, %s", err)
 		}
 
-		coreCount := runtime.NumCPU()
-		fmt.Printf("Found %d cores\n", coreCount)
-		if threads == 0 {
-			threads = coreCount * 2
-		}
-
 		if threads < coreCount * 2 {
-			log.Warningf("Recommend 2 threads / core, currently %d", threads )
+			log.Warningf("Recommend 2 threads / core, currently %d for %d cores", threads, coreCount )
 		}
 
 		log.Debug("Launching NFS Bench")
@@ -114,7 +120,6 @@ func main() {
 			log.Info("Running NFS write test.")
 			write_bytes_per_sec, hashValueWrite = nfs_bench.WriteTest()
 		}
-		
 
 		fmt.Println("Running NFS read test.")
 		read_bytes_per_sec, hashValueRead := nfs_bench.ReadTest()
@@ -126,8 +131,13 @@ func main() {
 
 		if verify {
 			log.Infof("   Read Data Hash: %x\n", hashValueRead )
+			// add 1 to nodeID, to change from 0 Indexed to 1 indexed.
+			fmt.Printf("Spread Hash Threads: %d, Hash Node %d of %d ", threads, nodeID + 1, nodes)
+			fmt.Printf("          Read Hash: %x\n", hashValueRead )
 			if !readOnly{
-				log.Infof("Written Data Hash: %x\n", hashValueWrite )
+				// add 1 to nodeID, to change from 0 Indexed to 1 indexed.
+				fmt.Printf("Spread Hash Threads: %d, Hash Node %d of %d ", threads, nodeID + 1, nodes)
+				log.Infof("        Written Hash: %x\n", hashValueWrite )
 				if !bytes.Equal(hashValueRead, hashValueWrite) {
 					log.Error("Error Error bad DATA !!!!!!!!!!!! ")
 				}
@@ -148,18 +158,28 @@ func main() {
 			log.Fatalf("Threads must be specified for a correct hash.")
 		}
 
-		nfs, err := NewSpreadHash(src_ff, threads, nodes, nodeID)
+		src_ff, err = NewFlexFile(flag.Args()[0])
+		if err != nil {
+			log.Fatalf("Error opening destination file, %s", err)
+		}
+
+		max_threads := int64( src_ff.size / min_thread_size ) + 1
+		if  max_threads < int64(threads) {
+			threads = int(max_threads)
+			log.Info("Thread count reduced to %d because of a small file. ")
+		}
+
+		nfs, err := NewSpreadHash(src_ff, threads, nodes, nodeID, *progressPtr)
 		if err != nil {
 			log.Fatal(err)
 		}
 
 		copy_bytes_per_sec, hashValueWrite := nfs.SpreadHash()
-		fmt.Printf("Write Throughput = %f MiB/s\n", copy_bytes_per_sec)
-		if verify {
-			fmt.Printf("Spread Hash Threads: %d, Hash Node %d of %d ", threads, nodeID, nodes)
-			fmt.Printf("       Hash: %x\n", hashValueWrite )
+		fmt.Printf("Read Throughput = %f MiB/s\n", copy_bytes_per_sec)
+		// add 1 to nodeID, to change from 0 Indexed to 1 indexed.
+		fmt.Printf("Spread Hash Threads: %d, Hash Node %d of %d ", threads, nodeID + 1, nodes)
+		fmt.Printf("       Hash: %x\n", hashValueWrite )
 			
-		}
 		os.Exit(0)
 	}
 
@@ -230,16 +250,22 @@ func main() {
 		nfs.Stream()
 	} else {
 		nfs, err := NewNFSCopy(src_ff, dst_ff, threads, nodes, nodeID, verify, *copyv2)
-
 		if err != nil {
 			log.Fatal(err)
+		}
+
+		max_threads := int64( src_ff.size / min_thread_size ) + 1
+		if  max_threads < int64(threads) {
+			threads = int(max_threads)
+			log.Info("Thread count reduced to %d because of a small file. ")
 		}
 
 		log.Info("Running NFS MultiCopy.")
 		copy_bytes_per_sec, hashValueWrite := nfs.SpreadCopy()
 		fmt.Printf("Write Throughput = %f MiB/s\n", copy_bytes_per_sec)
 		if verify {
-			fmt.Printf("Spread Hash Threads: %d, Hash Node %d of %d ", threads, nodeID, nodes)
+			// add 1 to nodeID, to change from 0 Indexed to 1 indexed.
+			fmt.Printf("Spread Hash Threads: %d, Hash Node %d of %d ", threads, nodeID + 1, nodes)
 			fmt.Printf("       Hash: %x\n", hashValueWrite )
 			
 		}

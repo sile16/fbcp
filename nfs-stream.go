@@ -67,6 +67,9 @@ func (n *NFSInfo) Stream() {
 	// spin up the producers
 	if n.src_ff.is_pipe {
 		log.Debug("Starting Pipe Producer")
+		if n.plaid {
+			log.Warn("Ignoring Plaid, because producer is a pipe.")
+		}
 		pwg.Add(1)
 		go n.PipeProducer(ch, pwg, &bufPool)
 	} else {
@@ -80,14 +83,19 @@ func (n *NFSInfo) Stream() {
 
 		offset := uint64(0)
 
-		if n.plaid {
+		if n.plaid && n.dst_ff.is_pipe{
+			log.Warn("Ignoring Plaid Producer because output is a pipe.")
+		} 
+
+		if n.plaid && !n.dst_ff.is_pipe {
 			// dispatch reads in a plaid manner
+			// would use up a ton of memmory if consumer is 
 			log.Debugf("Starting a Plaid NFS Streamer")
 			min_thread_size  := uint64(32) * 1024 * 1024
 
 			bytes_per_thread := n.src_ff.size / uint64(n.concurrency)
-			remainder_per_thread :=  bytes_per_thread % min_thread_size
-			bytes_per_thread += min_thread_size - remainder_per_thread
+			//remainder_per_thread :=  bytes_per_thread % min_thread_size
+			//bytes_per_thread += min_thread_size - remainder_per_thread
 
 			if bytes_per_thread < min_thread_size {
 				bytes_per_thread = min_thread_size
@@ -152,7 +160,6 @@ func (n *NFSInfo) NFSProducer(dispatch <-chan ChannelMsg, ch chan<- ChannelMsg, 
 		//n.mu.Unlock()
 		//buf := make([]byte, n.sizeMB)
 		bytes_read := uint64(0)
-
 
 		for {
 			if bytes_read == msg.len {
@@ -219,7 +226,6 @@ func (n *NFSInfo) NFSConsumer(ch <-chan ChannelMsg, pool *sync.Pool, cwg *sync.W
 func (n *NFSInfo) PipeProducer(ch chan<- ChannelMsg, pwg *sync.WaitGroup, pool *sync.Pool) {
 	defer pwg.Done()
 
-	//reader = bufio.NewReader(os.Stdin)
 	reader, err := n.src_ff.Open()
 
 	if err != nil {
