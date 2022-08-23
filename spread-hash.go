@@ -15,10 +15,24 @@ import (
 
 func NewSpreadHash(src_ff *FlexFile, concurrency int, nodes int, nodeID int, progress bool ) (*NFSInfo, error) {
 
+	max_threads := int64( src_ff.size / min_thread_size )
+	if uint64(max_threads) * min_thread_size < src_ff.size{
+		max_threads += 1
+	}
+	if max_threads == 0{
+		max_threads = 1
+	}
+	if  max_threads < int64(concurrency) {
+		concurrency = int(max_threads)
+		log.Infof("Thread count reduced to %d because of a small file. ", concurrency)
+	}
+	
+
 	nfsHash := &NFSInfo{
 		src_ff: src_ff, 
 		concurrency: concurrency, 
 	    hashes: make([][]byte, concurrency),
+		thread_bytes: make([]uint64, concurrency),
 	    progress: progress }
 	
 	if !nfsHash.src_ff.exists {
@@ -59,12 +73,12 @@ func (n *NFSInfo) SpreadHash() (float64, []byte) {
 
 	offset := n.nodeOffset
 
-	for i := 0; i < n.concurrency && offset < n.src_ff.size; i++ {
+	for i := 0; i < n.concurrency ; i++ {
 	
 		// check to see if we would hit end of the file before even starting.
-		if (offset) > n.src_ff.size {
-			break
-		}
+		//if (offset) > n.src_ff.size {
+		//	break
+		//}
 
 		// also we can't exceed the end of the file.
 		max_bytes_to_read := n.sizeMB
@@ -72,10 +86,9 @@ func (n *NFSInfo) SpreadHash() (float64, []byte) {
 			max_bytes_to_read = n.src_ff.size - offset
 		}
 
-		name := fmt.Sprintf("Thread#%d:", i)
-
 		var bar *mpb.Bar
 		if n.progress{
+			name := fmt.Sprintf("Thread#%d:", i)
 			bar = p.AddBar(int64(max_bytes_to_read),
 					mpb.PrependDecorators(
 						decor.Name(name),
@@ -96,6 +109,11 @@ func (n *NFSInfo) SpreadHash() (float64, []byte) {
 	
 	hasher := xxh3.New()
 	for  i :=  0 ; i < len(n.hashes); i++ {
+		if n.hashes[i] == nil {
+			log.Panicf("Thread %d failed to provide a hash value", i + 1)
+		}
+		log.Infof("Thread %d hash: %x  offset: %d  bytes: %d",
+		                  i+1, n.hashes[i], n.nodeOffset, n.thread_bytes[i])
 		hasher.Write(n.hashes[i])
 	}
 	hashValue :=hasher.Sum([]byte{})
@@ -168,5 +186,6 @@ func (n *NFSInfo) hashOneFileChunk(offset uint64, num_bytes uint64, threadID int
 	}
 	
 	n.hashes[threadID] = hasher.Sum([]byte{})
+	n.thread_bytes[threadID] = thread_bytes_read
 	atomic.AddUint64(&n.atm_counter_bytes_read, thread_bytes_read)
 }

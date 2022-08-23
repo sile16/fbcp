@@ -14,11 +14,25 @@ import (
 )
 
 func NewNFSCopy(src_ff *FlexFile, dst_ff *FlexFile, concurrency int, nodes int, nodeID int, verify bool, copyv2 bool, progress bool) (*NFSInfo, error) {
+	max_threads := int64( src_ff.size / min_thread_size )
+	if uint64(max_threads) * min_thread_size < src_ff.size{
+		max_threads += 1
+	}
+	if max_threads == 0{
+		max_threads = 1
+	}
+
+	if  max_threads < int64(concurrency) {
+		concurrency = int(max_threads)
+		log.Infof("Thread count reduced to %d because of a small file. ", concurrency)
+	}
 
 	nfsNFSCopy := &NFSInfo{
 		src_ff: src_ff, dst_ff: dst_ff,
 		concurrency: concurrency, filesWritten: 0,
-		hashes: make([][]byte, concurrency), verify: verify, copyv2: copyv2}
+		hashes: make([][]byte, concurrency), 
+		thread_bytes: make([]uint64, concurrency),
+		verify: verify, copyv2: copyv2}
 
 	if !nfsNFSCopy.src_ff.exists {
 		log.Fatalf("Error: source fle %s doesn't exist", nfsNFSCopy.src_ff.file_name)
@@ -68,12 +82,7 @@ func (n *NFSInfo) SpreadCopy() (float64, []byte) {
 
 	offset := n.nodeOffset
 
-	for i := 0; i < n.concurrency && offset < n.src_ff.size; i++ {
-
-		// check to see if we would hit end of the file before even starting.
-		if (offset) > n.src_ff.size {
-			break
-		}
+	for i := 0; i < n.concurrency ; i++ {
 
 		// also we can't exceed the end of the file.
 		max_bytes_to_read := n.sizeMB
@@ -81,10 +90,9 @@ func (n *NFSInfo) SpreadCopy() (float64, []byte) {
 			max_bytes_to_read = n.src_ff.size - offset
 		}
 
-		name := fmt.Sprintf("Thread#%d:", i)
-
 		var bar *mpb.Bar
 		if n.progress {
+			name := fmt.Sprintf("Thread#%d:", i)
 			bar = p.AddBar(int64(max_bytes_to_read),
 				mpb.PrependDecorators(
 					decor.Name(name),
@@ -120,6 +128,8 @@ func (n *NFSInfo) SpreadCopy() (float64, []byte) {
 			log.Warn("No read hash available ")
 			break
 		}
+		log.Infof("Thread %d hash: %x  offset: %d  bytes: %d",
+		                  i+1, n.hashes[i], n.nodeOffset, n.thread_bytes[i])
 		hasher.Write(n.hashes[i])
 	}
 	var hashValue []byte
@@ -231,9 +241,9 @@ func (n *NFSInfo) copyOneFileChunk(offset uint64, num_bytes uint64, threadID int
 	}
 
 	n.hashes[threadID] = hasher.Sum([]byte{})
-	atomic.AddUint64(&n.atm_counter_bytes_read, thread_bytes_read)
+	n.thread_bytes[threadID] = thread_bytes_written
 
-	n.hashes[threadID] = hasher.Sum([]byte{})
+	atomic.AddUint64(&n.atm_counter_bytes_read, thread_bytes_read)
 	atomic.AddUint64(&n.atm_counter_bytes_written, thread_bytes_written)
 }
 

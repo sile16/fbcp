@@ -5,10 +5,12 @@ import (
 	"path/filepath"
 	"strconv"
 	"testing"
+	log "github.com/sirupsen/logrus"
 )
 
 func TestNFSCopyHash(tb *testing.T) {
 	setupSuite(tb)
+	log.SetLevel(log.DebugLevel)
 
 	for _, tc := range hash_tests {
 		name := tc.name + "__" + strconv.FormatInt(int64(tc.threads),10) + " Threads"

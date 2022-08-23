@@ -17,8 +17,9 @@ import (
 )
 
 type NFSInfo struct {
-	concurrency     int
-	hashes          [][]byte
+	concurrency    int
+	hashes         [][]byte
+	thread_bytes   []uint64
 
 	sizeMB          uint64
 	nodeOffset      uint64
