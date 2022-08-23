@@ -38,6 +38,57 @@ type NFSInfo struct {
 	dst_ff                     *FlexFile
 }
 
+type ReadWriteSeekerCloser interface {
+    io.Reader
+    io.Writer
+    io.Seeker
+	io.Closer
+}
+
+type ReadWriteSeekerCloserReaderFrom interface {
+    io.Reader
+    io.Writer
+    io.Seeker
+	io.Closer
+	io.ReaderFrom
+}
+
+///////////////////////////////////////////////////////////////////
+// Adding the Readfrom function, so that I can use os.file readfrom.
+// which on linux implements the sendfile function for high perf
+// so, all NFS calls, even if not REadFrom go through this wrapper
+// I wouldn't think it makes a difference
+type ReadFromFileWrapper struct {
+	fh ReadWriteSeekerCloser
+}
+
+func NewReadFromFileWrapper (nfs_file ReadWriteSeekerCloser) *ReadFromFileWrapper {
+	return &ReadFromFileWrapper{
+		fh: nfs_file,
+	}
+}
+
+func (fw *ReadFromFileWrapper) ReadFrom(r io.Reader) (n int64, err error) {
+	return io.Copy(fw.fh, r)
+}
+
+func (fw *ReadFromFileWrapper) Read(p []byte) (int, error) {
+	return fw.fh.Read(p)
+}
+
+func (fw *ReadFromFileWrapper) Write(p []byte) (int, error) {
+	return fw.fh.Write(p)
+}
+
+func (fw *ReadFromFileWrapper) Close() error {
+	return fw.fh.Close()
+}
+
+func (fw *ReadFromFileWrapper) Seek(offset int64, whence int) (int64, error) {
+	return fw.fh.Seek(offset, whence)
+}
+///////////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////
 
 type FlexFile struct {
 	
@@ -51,29 +102,23 @@ type FlexFile struct {
 	size uint64
 	is_directory bool
 	is_pipe bool
+	is_os_file bool
 	pipe *os.File
 
-}
-
-type ReadWriteSeekerCloser interface {
-    io.Reader
-    io.Writer
-    io.Seeker
-	io.Closer
 }
 
 func NewFlexFilePipe(pipe *os.File) (*FlexFile, error) {
 	ff := FlexFile{size: 0, exists: false, 
 		is_directory: false, 
-		is_pipe: true, is_nfs: false, pipe: pipe, file_name: pipe.Name(),}
+		is_pipe: true, is_nfs: false, pipe: pipe, is_os_file: false,
+		file_name: pipe.Name(),}
 
 	return &ff, nil
 }
 
-
-
 func NewFlexFile(file_path string ) (*FlexFile, error){
-	ff := FlexFile{size: 0, exists: false, is_directory: false, is_pipe: false}
+	ff := FlexFile{size: 0, exists: false, is_directory: false,
+		 is_pipe: false, is_os_file: false}
 	
 	if strings.Contains(file_path, ":") {
 		ff.is_nfs = true
@@ -130,7 +175,6 @@ func NewFlexFile(file_path string ) (*FlexFile, error){
 		ff.file_name = filepath.Base(file_path)
 		ff.file_full_path, _ = filepath.Abs(file_path)
 		
-		
 		file_info, err := os.Stat(file_path)
 		if err != nil {
 			return &ff, nil
@@ -140,7 +184,10 @@ func NewFlexFile(file_path string ) (*FlexFile, error){
 
 		if file_info.IsDir() {
 			ff.is_directory = true
+		} else {
+			ff.is_os_file = true
 		}
+
 		//todo: get mode bits here
 
 		return &ff, nil
@@ -190,7 +237,7 @@ func (ff *FlexFile) Truncate(size int64 ) error {
 	
 }
 
-func (ff *FlexFile) Open() (ReadWriteSeekerCloser, error) {
+func (ff *FlexFile) Open() (ReadWriteSeekerCloserReaderFrom, error) {
 	// Open the File
 	if ff.pipe != nil {
 		return ff.pipe, nil
@@ -228,7 +275,8 @@ func (ff *FlexFile) Open() (ReadWriteSeekerCloser, error) {
 			mount_dst.Close()
 			return nil, err
 		}
-		return f_dst, nil
+		f_dst_wrapper := NewReadFromFileWrapper(f_dst)
+		return f_dst_wrapper, nil
 
 	} else {
 		var f_dst *os.File
@@ -247,6 +295,31 @@ func (ff *FlexFile) Open() (ReadWriteSeekerCloser, error) {
 		}
 		return  f_dst, nil
 	}
+
+}
+
+func (ff *FlexFile) ReadFrom(r io.Reader) (n int64, err error) {
+
+	if ff.is_pipe {
+		return ff.pipe.ReadFrom(r)
+	} else if ff.is_nfs {
+		//return 0, errors.New("ReadFrom Not implemented for nfs")
+		return 
+	} else {
+		// we are a regular file at this point.
+		var f_dst *os.File
+		var err error
+
+		f_dst, err = os.OpenFile(ff.file_full_path, os.O_RDWR | os.O_CREATE, 0644)
+		
+		if err != nil {
+			fmt.Printf("OpenFile %s failed\n", ff.file_full_path)
+			fmt.Println(err)
+			return 0, err
+		}
+
+		return f_dst.ReadFrom(r)
+	} 
 }
 
 

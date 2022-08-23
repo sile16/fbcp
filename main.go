@@ -129,7 +129,7 @@ func main() {
 		
 		log.Infof("Read Throughput = %f MiB/s\n", read_bytes_per_sec)
 
-		if verify {
+		if verify && hashValueRead != nil {
 			log.Infof("   Read Data Hash: %x\n", hashValueRead )
 			// add 1 to nodeID, to change from 0 Indexed to 1 indexed.
 			fmt.Printf("Spread Hash Threads: %d, Hash Node %d of %d ", threads, nodeID + 1, nodes)
@@ -182,9 +182,6 @@ func main() {
 			
 		os.Exit(0)
 	}
-
-
-	
 
 	if pipein && !pipeout && flag.NArg() == 1 {
 		src_ff, _ = NewFlexFilePipe(os.Stdin)
@@ -249,21 +246,21 @@ func main() {
 		log.Info("Running a Stream Copy.")
 		nfs.Stream()
 	} else {
-		nfs, err := NewNFSCopy(src_ff, dst_ff, threads, nodes, nodeID, verify, *copyv2, *progressPtr)
-		if err != nil {
-			log.Fatal(err)
-		}
-
 		max_threads := int64( src_ff.size / min_thread_size ) + 1
 		if  max_threads < int64(threads) {
 			threads = int(max_threads)
 			log.Infof("Thread count reduced to %d because of a small file. ", threads)
 		}
 
+		nfs, err := NewNFSCopy(src_ff, dst_ff, threads, nodes, nodeID, verify, *copyv2, *progressPtr)
+		if err != nil {
+			log.Fatal(err)
+		}
+
 		log.Info("Running NFS MultiCopy.")
 		copy_bytes_per_sec, hashValueWrite := nfs.SpreadCopy()
 		fmt.Printf("Write Throughput = %f MiB/s\n", copy_bytes_per_sec)
-		if verify {
+		if verify && hashValueWrite != nil{
 			// add 1 to nodeID, to change from 0 Indexed to 1 indexed.
 			fmt.Printf("Spread Hash Threads: %d, Hash Node %d of %d ", threads, nodeID + 1, nodes)
 			fmt.Printf("       Hash: %x\n", hashValueWrite )

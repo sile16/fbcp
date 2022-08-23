@@ -10,7 +10,7 @@
             "request": "launch",
             "mode": "debug",
             "program": "${workspaceFolder}",
-            "args": ["-threads", "5","-sizeMB", "32", "-verbose","../junk1", "../junk2"]
+            "args": ["-threads", "16","-verify" "-verbose","tempdir/3", "../junk2"]
         },
         {
             "name": "Local Spread Copy copyv2",
@@ -83,7 +83,7 @@
             "request": "launch",
             "mode": "debug",
             "program": "${workspaceFolder}",
-            "args": ["-hash", "-threads", "5", "-verbose", "../junk2",]
+            "args": ["-hash", "-threads", "16", "-verbose", "../junk2",]
         },
         {
             "name": "Hash spread Test Local  64 G",
