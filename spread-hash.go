@@ -25,21 +25,15 @@ func NewSpreadHash(src_ff *FlexFile, concurrency int, nodes int, nodeID int, pro
 		log.Fatalf("Error: source fle %s doesn't exist", nfsHash.src_ff.file_name)
 	}
 
-	// min each thread will get minimum of 32 MB of data
 	
-
+	// Divide entire file size across all the threads on all nodes.
 	bytes_per_thread := nfsHash.src_ff.size / uint64( nodes * concurrency)
 
-	//remainder_per_thread :=  bytes_per_thread % min_thread_size
-	//bytes_per_thread += min_thread_size - remainder_per_thread
-	//replaced above with the below if statement.
-	
-	//Why do we even have a minimum ? Only problem I see is if file is smaller 
-	//than the thread count 
+	// min each thread will get minimum of 16 MB of data
+	// this also handles small files gracefully.
 	if bytes_per_thread < min_thread_size{
 		bytes_per_thread = min_thread_size
 	}
-
 	nfsHash.sizeMB = bytes_per_thread
 	nfsHash.nodeSize =  bytes_per_thread * uint64(concurrency)
 	nfsHash.nodeOffset = uint64(nodeID) * nfsHash.nodeSize

@@ -166,7 +166,7 @@ func main() {
 		max_threads := int64( src_ff.size / min_thread_size ) + 1
 		if  max_threads < int64(threads) {
 			threads = int(max_threads)
-			log.Info("Thread count reduced to %d because of a small file. ")
+			log.Infof("Thread count reduced to %d because of a small file. ", threads)
 		}
 
 		nfs, err := NewSpreadHash(src_ff, threads, nodes, nodeID, *progressPtr)
@@ -249,7 +249,7 @@ func main() {
 		log.Info("Running a Stream Copy.")
 		nfs.Stream()
 	} else {
-		nfs, err := NewNFSCopy(src_ff, dst_ff, threads, nodes, nodeID, verify, *copyv2)
+		nfs, err := NewNFSCopy(src_ff, dst_ff, threads, nodes, nodeID, verify, *copyv2, *progressPtr)
 		if err != nil {
 			log.Fatal(err)
 		}
@@ -257,7 +257,7 @@ func main() {
 		max_threads := int64( src_ff.size / min_thread_size ) + 1
 		if  max_threads < int64(threads) {
 			threads = int(max_threads)
-			log.Info("Thread count reduced to %d because of a small file. ")
+			log.Infof("Thread count reduced to %d because of a small file. ", threads)
 		}
 
 		log.Info("Running NFS MultiCopy.")

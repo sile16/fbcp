@@ -1,45 +1,68 @@
 package main
 
 import (
+	"fmt"
 	"math/rand"
-	"testing"
 	"os"
+	"path/filepath"
 	"strconv"
+	"testing"
 )
 
 const MB uint64 = 1024 * 1024
 
-var tests = []struct {
+var hash_tests = []struct {
+	name string
 	size uint64
-	want string
+	threads int
+	expected string
 }{
-	{0, ""},
-	{1, ""},
-	{3, ""},
-	{min_thread_size - 1, "[]}"},
-	{min_thread_size, "[]"},
-	{min_thread_size + 1, "[]"},
-	{64 * MB,"[]"},
-	{64 * MB + 1,"[]"},
-	{512 * MB,"[]"},
-	{2048 * MB, "[]"},
-	{2048 * MB - 1, "[]"},
+	// 16 Threads
+	{"Empty File", 		0, 16, "2d06800538d394c2"},
+	{"1 Byte File",		1 ,16,  "70b30bdcfe088d72"},
+	{"3 Byte File", 	3, 16,  "91d71c71c09fbce0"},
+	{"Min size minus 1 byte", min_thread_size - 1, 16,  "1d342169a679aa0d"},
+	{"Min size",min_thread_size,16,   "0194b09b08323189"},
+	
+	{"Min size + 1 byte", min_thread_size + 1, 16,  "b1a2b18ef19c9425"},
+	{"64MB", 64 * MB,16,  "e199642d6a8faa44"},
+	{"64MB +1", 64 * MB + 1,16,  "5b99e57350ebedf3"},
+	{"512MB",512 * MB,16,  "9081b6722086479c"},
+	{"2G", 2048 * MB,16,   "b034caa2fc3a22f3"},
+	{"2G -1", 2048 * MB - 1, 16,"942c622dff96ba1f"},
+
+	// 1 Threads
+
+	{"Empty File", 0, 1, "2d06800538d394c2"},
+	{"1 Byte File",1 ,1,  "70b30bdcfe088d72"},
+	{"3 Byte File", 3, 1,  "91d71c71c09fbce0"},
+	{"Min size minus 1 byte", min_thread_size - 1, 1,  "1d342169a679aa0d"},
+	{"Min size",min_thread_size,1,   "0194b09b08323189"},
+	
+	{"Min size + 1 byte", min_thread_size + 1, 1,  "5dca84a61c7cefd0"},
+	{"64MB", 64 * MB, 1,  "f113a1b015d7c178"},
+	{"64MB +1", 64 * MB + 1, 1,  "0cc5a528bcb8f3a7"},
+	{"512MB",512 * MB,1,  "1c880af72d4f961b"},
+	{"2G", 2048 * MB,1,   "a9d152f0af30f080"},
+	{"2G -1", 2048 * MB - 1, 1,"537de2e155f4b9e5"},
 }
 
-func create_tmp_file(file_size uint64, buf []byte)  {
+func create_tmp_file(t *testing.T, file_size uint64, buf []byte)  {
 
-	f, err := os.Create(strconv.FormatUint(file_size, 10))
+	file_path := filepath.Join("tempdir", strconv.FormatUint(file_size, 10))
+	f, err := os.Create(file_path)
     if err != nil{
-		panic(err)
+		t.Log("Temp file already exists.")
 	}
     defer f.Close()
 
+	
 	for written := uint64(0) ; written < file_size ; {
 		bytes_to_write := uint64(len(buf))
 		if written + bytes_to_write > file_size {
 			bytes_to_write = file_size - written
 		}
-		n_bytes, err := f.Write(buf)
+		n_bytes, err := f.Write(buf[:bytes_to_write])
 		if err != nil{
 			panic(err)
 		}
@@ -48,12 +71,9 @@ func create_tmp_file(file_size uint64, buf []byte)  {
 	}	
 }
 
-func str(file_size uint64) {
-	panic("unimplemented")
-}
 
 // You can use testing.T, if you want to test the code without benchmarking
-func setupSuite(tb *testing.TB) {
+func setupSuite(tb *testing.T) {
 	//log.Println("setup suite")
 	srcBuf := make([]byte, 1024*1024)
 
@@ -61,12 +81,33 @@ func setupSuite(tb *testing.TB) {
 	rand.Seed(89239342)
 	rand.Read(srcBuf)
 
-	tb.TempDir()
-
+	//setup
+	os.Mkdir("tempdir", os.ModePerm)
+	for _, tc := range hash_tests {
+		create_tmp_file(tb, tc.size, srcBuf)
+	}
 }
 
-func TestSpread(tb *testing.TB) {
-	teardownSuite := setupSuite(t)
-	defer teardownSuite(t)
+func TestSpreadHash(tb *testing.T) {
+	setupSuite(tb)
 
+	for _, tc := range hash_tests {
+		name := tc.name + "__" + strconv.FormatInt(int64(tc.threads),10) + " Threads"
+		tb.Run(name, func(t *testing.T) {
+
+			file_path := filepath.Join("tempdir", strconv.FormatUint(tc.size, 10))
+
+			src_ff, _ := NewFlexFile(file_path)
+			nfshash, _ := NewSpreadHash(src_ff, tc.threads, 1, 0, false)
+			_, hash := nfshash.SpreadHash()
+	
+			hash_string := fmt.Sprintf("%x",hash)
+
+			if hash_string != tc.expected {
+				t.Errorf("expected %s, got %s", tc.expected, hash_string)
+			}
+		})
+	}
+
+ 
 }

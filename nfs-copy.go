@@ -13,7 +13,7 @@ import (
 	"github.com/vbauerster/mpb/v7/decor"
 )
 
-func NewNFSCopy(src_ff *FlexFile, dst_ff *FlexFile, concurrency int, nodes int, nodeID int , verify bool, copyv2 bool) (*NFSInfo, error) {
+func NewNFSCopy(src_ff *FlexFile, dst_ff *FlexFile, concurrency int, nodes int, nodeID int , verify bool, copyv2 bool, progress bool) (*NFSInfo, error) {
 
 	nfsNFSCopy := &NFSInfo{
 		src_ff: src_ff, dst_ff: dst_ff, 
@@ -34,13 +34,12 @@ func NewNFSCopy(src_ff *FlexFile, dst_ff *FlexFile, concurrency int, nodes int, 
 		dst_ff.Truncate(int64(src_ff.size))
 	}
 
-	// min each thread will get minimum of 32 MB of data
-	
-	min_thread_size  := uint64(32) * 1024 * 1024
-
+	// Divide entire file size across all the threads on all nodes.
 	bytes_per_thread := nfsNFSCopy.src_ff.size / uint64( nodes * concurrency)
 
-	if bytes_per_thread < min_thread_size{
+	// min each thread will get minimum of 16 MB of data
+	// this also handles small files gracefully.
+	if bytes_per_thread < min_thread_size {
 		bytes_per_thread = min_thread_size
 	}
 
@@ -56,11 +55,14 @@ func (n *NFSInfo) SpreadCopy() (float64, []byte) {
 	atomic.StoreInt32(&n.atm_finished, 0)
 	atomic.StoreUint64(&n.atm_counter_bytes_written, 0)
 	
-	p := mpb.New(
-		mpb.WithWaitGroup(&n.wg),
-	    mpb.WithWidth(60),
-		mpb.WithRefreshRate(1000*time.Millisecond),
-	)
+	var p *mpb.Progress
+	if n.progress {
+		p = mpb.New(
+			mpb.WithWaitGroup(&n.wg),
+			mpb.WithWidth(60),
+			mpb.WithRefreshRate(1000*time.Millisecond),
+		)
+	}
 	
 	start := time.Now()
 
@@ -81,17 +83,20 @@ func (n *NFSInfo) SpreadCopy() (float64, []byte) {
 
 		name := fmt.Sprintf("Thread#%d:", i)
 
-		bar := p.AddBar(int64(max_bytes_to_read),
-					mpb.PrependDecorators(
-						decor.Name(name),
-						decor.CountersKibiByte("% .1f / % .1f"),
-					),
-					mpb.AppendDecorators(
-						decor.EwmaETA(decor.ET_STYLE_GO, 90),
-						decor.Name(" ] "),
-						decor.EwmaSpeed(decor.UnitKiB, "% .1f", 60),
-					),
-				)
+		var bar *mpb.Bar
+		if n.progress {
+			bar= p.AddBar(int64(max_bytes_to_read),
+						mpb.PrependDecorators(
+							decor.Name(name),
+							decor.CountersKibiByte("% .1f / % .1f"),
+						),
+						mpb.AppendDecorators(
+							decor.EwmaETA(decor.ET_STYLE_GO, 90),
+							decor.Name(" ] "),
+							decor.EwmaSpeed(decor.UnitKiB, "% .1f", 60),
+						),
+					)
+		}
 		n.wg.Add(1)
 		if n.copyv2 {
 			go n.copyOneFileChunkv2(offset, max_bytes_to_read, i, bar)
@@ -196,7 +201,10 @@ func (n *NFSInfo) copyOneFileChunk(offset uint64, num_bytes uint64, threadID int
 				break
 			}
 			n_bytes_written_this_chunk += uint64(n_bytes_written)
-			bar.IncrBy(n_bytes_written)
+			if n.progress {
+				bar.IncrBy(n_bytes_written)
+			}
+			
 			if n_bytes_written_this_chunk == uint64(n_bytes) {
 				break
 			}
