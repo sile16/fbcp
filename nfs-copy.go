@@ -131,7 +131,7 @@ func (n *NFSInfo) SpreadCopy() (float64, []byte) {
 			log.Warn("No read hash available ")
 			break
 		}
-		log.Infof("Thread %d hash: %x  offset: %d  bytes: %d",
+		log.Debugf("Thread %d hash: %x  offset: %d  bytes: %d",
 		                  i+1, n.hashes[i], n.nodeOffset + uint64(i) * n.sizeMB, n.thread_bytes[i])
 		hasher.Write(n.hashes[i])
 	}
