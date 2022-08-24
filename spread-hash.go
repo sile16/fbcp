@@ -13,21 +13,24 @@ import (
 	"github.com/vbauerster/mpb/v7/decor"
 )
 
-func NewSpreadHash(src_ff *FlexFile, concurrency int, nodes int, nodeID int, progress bool ) (*NFSInfo, error) {
+func NewSpreadHash(src_ff *FlexFile, concurrency int, nodes int, nodeID int, bytes_per_thread uint64, progress bool) (*NFSInfo, error) {
 
-	max_threads := int64( src_ff.size / min_thread_size )
-	if uint64(max_threads) * min_thread_size < src_ff.size{
-		max_threads += 1
+	if bytes_per_thread == 0 {
+		bytes_per_thread = getBytesPerThread(src_ff.size, nodes, concurrency)
 	}
-	if max_threads == 0{
-		max_threads = 1
-	}
-	if  max_threads < int64(concurrency) {
-		concurrency = int(max_threads)
+
+	needed_threads_per_node := getThreadCount(src_ff.size, uint64(nodes), bytes_per_thread)
+
+	if  needed_threads_per_node < uint64(concurrency) {
+		//File is too small for this concurrency, we are reducing it.
+		concurrency = int(needed_threads_per_node)
 		log.Infof("Thread count reduced to %d because of a small file. ", concurrency)
+	} else if needed_threads_per_node > uint64(concurrency) {
+		log.Warnf("Thread count is increased to %d in order to hash entire file. ", concurrency)
+		concurrency = int(needed_threads_per_node)
 	}
-	
 
+	
 	nfsHash := &NFSInfo{
 		src_ff: src_ff, 
 		concurrency: concurrency, 
@@ -39,15 +42,7 @@ func NewSpreadHash(src_ff *FlexFile, concurrency int, nodes int, nodeID int, pro
 		log.Fatalf("Error: source fle %s doesn't exist", nfsHash.src_ff.file_name)
 	}
 
-	
-	// Divide entire file size across all the threads on all nodes.
-	bytes_per_thread := nfsHash.src_ff.size / uint64( nodes * concurrency)
 
-	// min each thread will get minimum of 16 MB of data
-	// this also handles small files gracefully.
-	if bytes_per_thread < min_thread_size{
-		bytes_per_thread = min_thread_size
-	}
 	nfsHash.sizeMB = bytes_per_thread
 	nfsHash.nodeSize =  bytes_per_thread * uint64(concurrency)
 	nfsHash.nodeOffset = uint64(nodeID) * nfsHash.nodeSize
@@ -108,13 +103,18 @@ func (n *NFSInfo) SpreadHash() (float64, []byte) {
 	n.wg.Wait()
 	
 	hasher := xxh3.New()
+
+	if n.hashes[0] == nil {
+		log.Panic("First Hash invalid")
+	}
+
 	for  i :=  0 ; i < len(n.hashes); i++ {
 		if n.hashes[i] == nil {
-			log.Panicf("Thread %d failed to provide a hash value", i + 1)
+			log.Debugf("Thread %d hash: %x  offset: %d  bytes: %d",
+		                  i+1, n.hashes[i],n.nodeOffset + uint64(i) * n.sizeMB, n.thread_bytes[i])
+		} else {
+			hasher.Write(n.hashes[i])
 		}
-		log.Infof("Thread %d hash: %x  offset: %d  bytes: %d",
-		                  i+1, n.hashes[i], n.nodeOffset, n.thread_bytes[i])
-		hasher.Write(n.hashes[i])
 	}
 	hashValue :=hasher.Sum([]byte{})
 	

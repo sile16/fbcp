@@ -347,3 +347,45 @@ func getShortHostname() string {
 	hostname = strings.Split(hostname, ".")[0]
 	return strings.ToLower(hostname)
 }
+
+func getThreadCount( size uint64, nodes uint64, bytes_per_thread uint64 ) uint64 {
+	
+	if size == 0 {
+		return 1
+	}
+
+	// total threads across all nodes
+	threads := size / bytes_per_thread
+	remainder_bytes := threads * bytes_per_thread - size
+	if remainder_bytes > 0 {
+		threads ++
+	}
+
+	// Round thread count up to a mulitple of the node count.
+	threads_per_node := ( threads + ( nodes - 1 )) / nodes
+	
+	return threads_per_node
+}
+
+func getBytesPerThread( size uint64, nodes int, concurrency int) uint64 {
+	if size == 0 {
+		return min_thread_size
+	}
+
+	// Round up to nearest multiple of 1MB per thread across all nodes
+	// https://stackoverflow.com/questions/9303604/rounding-up-a-number-to-nearest-multiple-of-5
+
+	OneMB_per_thread_per_node := 1024 * 1024 * uint64(nodes * concurrency)
+
+	// this is the way to round up to a multiple of OneMB_per_thread_per_node
+	padded_size :=  (size + (OneMB_per_thread_per_node - 1 )) / OneMB_per_thread_per_node * OneMB_per_thread_per_node
+
+	bytes_per_thread := padded_size / uint64( nodes * concurrency)
+
+	// Check to make sure we are at the minimum
+	if bytes_per_thread < min_thread_size {
+		bytes_per_thread = min_thread_size
+	}
+
+	return bytes_per_thread
+}

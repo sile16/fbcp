@@ -31,7 +31,7 @@ var hash_tests = []struct {
 	{"64MB +1", 64 * MB + 1, 16,  "5b99e57350ebedf3"},
 	{"512MB",512 * MB,16,  "9081b6722086479c"},
 	{"2G", 2048 * MB,16,   "b034caa2fc3a22f3"},
-	{"2G -1", 2048 * MB - 1, 16,"942c622dff96ba1f"},
+	{"2G -1", 2048 * MB - 1, 16,"60ddb8540582118e"},
 
 	// 1 Threads
 	{"Empty File", 		0, 1, "69da940740c0040b"},
@@ -102,7 +102,7 @@ func TestSpreadHash(tb *testing.T) {
 			file_path := filepath.Join("tempdir", strconv.FormatUint(tc.size, 10))
 
 			src_ff, _ := NewFlexFile(file_path)
-			nfshash, _ := NewSpreadHash(src_ff, tc.threads, 1, 0, false)
+			nfshash, _ := NewSpreadHash(src_ff, tc.threads, 1, 0,0, false)
 			_, hash := nfshash.SpreadHash()
 	
 			hash_string := fmt.Sprintf("%x",hash) 

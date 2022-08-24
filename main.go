@@ -23,7 +23,7 @@ func main() {
 
 	nodesPtr := flag.Int("nodes",1, "Total number of nodes running to split workload across machines" )
 	nodeIDPtr := flag.Int("node",1, "node ID number, first node starts at 1." )
-	sizeMBPtr := flag.Int64("sizeMB", 128, "Number MB generated per thread during benchmark")
+	sizeMBPtr := flag.Int64("sizeMB", 0, "Number MB generated per thread during benchmark")
 	threadsPtr := flag.Int("threads", 0, "Number of concurrent threads default is core count * 2")
 	verifyPtr := flag.Bool("verify", false, "re-read data to calculate hashes to verify data trasnfer integrity.")
 	zerosPtr := flag.Bool("zeros", false, "Benchmark Uses zeros instead of random data")
@@ -83,20 +83,55 @@ func main() {
 		pipeout = true
 	}
 	
-
-	coreCount := runtime.NumCPU()
-	if threads == 0 {
-		fmt.Printf("Found %d cores\n", coreCount)
-		threads = coreCount * 2
-	}
-
-	
 	// Flex file allows us to use a NFS path / local file or a Pipe transparentyly.
 	var src_ff *FlexFile
 	var dst_ff *FlexFile
 	var err error
 
+	//default_thread_used := false
+	coreCount := runtime.NumCPU()
+	if threads == 0 {
+		fmt.Printf("Found %d cores\n", coreCount)
+		threads = coreCount * 2
+		//default_thread_used = true
+	}
+
+	if hash {
+		//Same checks as benchamrk , single file check.
+		if flag.NArg() !=1 {
+			flag.Usage()
+			log.Fatal("Please provide a single test file.")
+		}
+
+		if threads == 0 {
+			log.Fatalf("Threads must be specified for a correct hash.")
+		}
+
+		src_ff, err = NewFlexFile(flag.Args()[0])
+		if err != nil {
+			log.Fatalf("Error opening destination file, %s", err)
+		}
+
+		nfs, err := NewSpreadHash(src_ff, threads, nodes, nodeID, uint64(sizeMB) * 1024 *1024, *progressPtr)
+		if err != nil {
+			log.Fatal(err)
+		}
+
+		copy_bytes_per_sec, hashValueWrite := nfs.SpreadHash()
+		fmt.Printf("Read Throughput = %f MiB/s\n", copy_bytes_per_sec)
+		// add 1 to nodeID, to change from 0 Indexed to 1 indexed.
+		fmt.Printf("Spread Hash Threads: %d, Hash Node %d of %d ", threads, nodeID + 1, nodes)
+		fmt.Printf("       Hash: %x\n", hashValueWrite )
+			
+		os.Exit(0)
+	}
+
+
 	if benchmark{
+		if sizeMB == 0 {
+			// default value for sizeMB
+			sizeMB = 128
+		}
 		// Benchmark, uses random data, or zeros to write to a file and read it back.
 		if flag.NArg() !=1 {
 			flag.Usage()
@@ -144,38 +179,6 @@ func main() {
 			}
 		}
 
-		os.Exit(0)
-	}
-
-	if hash {
-		//Same checks as benchamrk , single file check.
-		if flag.NArg() !=1 {
-			flag.Usage()
-			log.Fatal("Please provide a single test file.")
-		}
-
-		if threads == 0 {
-			log.Fatalf("Threads must be specified for a correct hash.")
-		}
-
-		src_ff, err = NewFlexFile(flag.Args()[0])
-		if err != nil {
-			log.Fatalf("Error opening destination file, %s", err)
-		}
-
-
-
-		nfs, err := NewSpreadHash(src_ff, threads, nodes, nodeID, *progressPtr)
-		if err != nil {
-			log.Fatal(err)
-		}
-
-		copy_bytes_per_sec, hashValueWrite := nfs.SpreadHash()
-		fmt.Printf("Read Throughput = %f MiB/s\n", copy_bytes_per_sec)
-		// add 1 to nodeID, to change from 0 Indexed to 1 indexed.
-		fmt.Printf("Spread Hash Threads: %d, Hash Node %d of %d ", threads, nodeID + 1, nodes)
-		fmt.Printf("       Hash: %x\n", hashValueWrite )
-			
 		os.Exit(0)
 	}
 
@@ -244,7 +247,8 @@ func main() {
 	} else {
 		
 
-		nfs, err := NewNFSCopy(src_ff, dst_ff, threads, nodes, nodeID, verify, *copyv2, *progressPtr)
+		nfs, err := NewNFSCopy(src_ff, dst_ff, threads, nodes, nodeID, uint64(sizeMB) * 1024 * 1024,
+			verify, *copyv2, *progressPtr)
 		if err != nil {
 			log.Fatal(err)
 		}

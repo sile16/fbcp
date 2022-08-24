@@ -13,18 +13,22 @@ import (
 	"github.com/vbauerster/mpb/v7/decor"
 )
 
-func NewNFSCopy(src_ff *FlexFile, dst_ff *FlexFile, concurrency int, nodes int, nodeID int, verify bool, copyv2 bool, progress bool) (*NFSInfo, error) {
-	max_threads := int64( src_ff.size / min_thread_size )
-	if uint64(max_threads) * min_thread_size < src_ff.size{
-		max_threads += 1
-	}
-	if max_threads == 0{
-		max_threads = 1
+func NewNFSCopy(src_ff *FlexFile, dst_ff *FlexFile, concurrency int, nodes int, nodeID int, 
+	bytes_per_thread uint64, verify bool, copyv2 bool, progress bool) (*NFSInfo, error) {
+	
+	if bytes_per_thread == 0 {
+		bytes_per_thread = getBytesPerThread(src_ff.size, nodes, concurrency)
 	}
 
-	if  max_threads < int64(concurrency) {
-		concurrency = int(max_threads)
+	needed_threads_per_node := getThreadCount(src_ff.size, uint64(nodes), bytes_per_thread)
+
+	if  needed_threads_per_node < uint64(concurrency) {
+		//File is too small for this concurrency, we are reducing it.
+		concurrency = int(needed_threads_per_node)
 		log.Infof("Thread count reduced to %d because of a small file. ", concurrency)
+	} else if needed_threads_per_node > uint64(concurrency) {
+		log.Warnf("Thread count is increased to %d in order to hash entire file. ", concurrency)
+		concurrency = int(needed_threads_per_node)
 	}
 
 	nfsNFSCopy := &NFSInfo{
@@ -48,9 +52,7 @@ func NewNFSCopy(src_ff *FlexFile, dst_ff *FlexFile, concurrency int, nodes int, 
 		dst_ff.Truncate(int64(src_ff.size))
 	}
 
-	// Divide entire file size across all the threads on all nodes.
-	bytes_per_thread := nfsNFSCopy.src_ff.size / uint64(nodes*concurrency)
-
+	
 	// min each thread will get minimum of 16 MB of data
 	// this also handles small files gracefully.
 	if bytes_per_thread < min_thread_size {
@@ -129,7 +131,7 @@ func (n *NFSInfo) SpreadCopy() (float64, []byte) {
 			break
 		}
 		log.Infof("Thread %d hash: %x  offset: %d  bytes: %d",
-		                  i+1, n.hashes[i], n.nodeOffset, n.thread_bytes[i])
+		                  i+1, n.hashes[i], n.nodeOffset + uint64(i) * n.sizeMB, n.thread_bytes[i])
 		hasher.Write(n.hashes[i])
 	}
 	var hashValue []byte
