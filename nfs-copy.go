@@ -5,6 +5,7 @@ import (
 	"io"
 	"sync/atomic"
 	"time"
+	"math/rand"
 
 	log "github.com/sirupsen/logrus"
 	xxh3 "github.com/zeebo/xxh3"
@@ -151,6 +152,11 @@ func (n *NFSInfo) SpreadCopy() (float64, []byte) {
 func (n *NFSInfo) copyOneFileChunk(offset uint64, num_bytes uint64, threadID int, bar *mpb.Bar) {
 
 	defer n.wg.Done()
+
+	//sleep time between threads
+	//Avoids slamming server 
+	time.Sleep(time.Duration(threadID) * 2 * time.Millisecond)
+
 	max_bytes_to_read := num_bytes
 
 	var f_src ReadWriteSeekerCloser = nil
@@ -253,6 +259,10 @@ func (n *NFSInfo) copyOneFileChunkv2(offset uint64, num_bytes uint64, threadID i
 
 	defer n.wg.Done()
 
+	//sleep time between threads
+	//Avoids slamming server 
+	time.Sleep(time.Duration(threadID) * 2 * time.Millisecond)
+
 	var f_src ReadWriteSeekerCloser = nil
 	var f_dst ReadWriteSeekerCloserReaderFrom = nil
 
@@ -261,8 +271,14 @@ func (n *NFSInfo) copyOneFileChunkv2(offset uint64, num_bytes uint64, threadID i
 	// Open the source file.
 	f_src, err = n.src_ff.Open()
 	if err != nil {
-		fmt.Print("Error opening source file.")
-		return
+		// Retry once,
+		sleepfor := 100 + rand.Intn(50)
+		log.Warnf("Thread %d will retry in %d miliseconds", threadID, sleepfor)
+		time.Sleep(time.Duration(sleepfor) * time.Millisecond)
+		f_src, err = n.src_ff.Open()
+		if err != nil{
+			log.Fatalf("Error opening source file: %s", n.src_ff.file_full_path)
+		}
 	}
 	defer f_src.Close()
 
@@ -270,8 +286,14 @@ func (n *NFSInfo) copyOneFileChunkv2(offset uint64, num_bytes uint64, threadID i
 	f_dst, err = n.dst_ff.Open()
 
 	if err != nil {
-		fmt.Print("Error opening destination file.")
-		return
+		// Retry once,
+		sleepfor := 100 + rand.Intn(50)
+		log.Warnf("Thread %d will retry in %d miliseconds", threadID, sleepfor)
+		time.Sleep(time.Duration(sleepfor) * time.Millisecond)
+		f_dst, err = n.dst_ff.Open()
+		if err != nil{
+			log.Fatalf("Error opening destination file: %s", n.dst_ff.file_full_path)
+		}
 	}
 	defer f_dst.Close()
 
