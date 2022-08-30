@@ -8,12 +8,12 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"time"
 
 	log "github.com/sirupsen/logrus"
 
 	"github.com/sile16/go-nfs-client/nfs"
 	"github.com/sile16/go-nfs-client/nfs/rpc"
-
 )
 
 type NFSInfo struct {
@@ -98,6 +98,7 @@ type FlexFile struct {
 	file_name string
 	file_path string
 	file_full_path string
+
 	exists bool
 	is_nfs bool
 	size uint64
@@ -246,9 +247,16 @@ func (ff *FlexFile) Open() (ReadWriteSeekerCloserReaderFrom, error) {
 	} else if ff.is_nfs {
 		mount_dst, err := nfs.DialMount(ff.nfs_host, true)
 		if err != nil {
-			fmt.Println("Portmapper failed.")
-			fmt.Println(err)
-			return nil, err
+			log.Warnf("DialMount %s failed\n", ff.nfs_host)
+			log.Warnf("%s", err)
+			time.Sleep(time.Millisecond * 10)
+			mount_dst, err = nfs.DialMount(ff.nfs_host, true)
+			if err != nil {
+				log.Warnf("Dial Mount retry failed.")
+				return nil, err
+			} else {
+				log.Warnf("Mount Retry succeeded")
+			}
 		}
 		//close todo: handle in FF
 
@@ -260,21 +268,35 @@ func (ff *FlexFile) Open() (ReadWriteSeekerCloserReaderFrom, error) {
 		
 		target_dst, err := mount_dst.Mount(ff.export, auth.Auth(), true)
 		if err != nil {
-			fmt.Println("Unable to mount.")
-			fmt.Println(err)
-			mount_dst.Close()
-			return nil, err
+			log.Warn("Unable to mount.")
+			log.Warnf("%s", err)
+			time.Sleep(time.Millisecond * 10)
+			target_dst, err = mount_dst.Mount(ff.export, auth.Auth(), true)
+			if err != nil {
+				log.Warnf("Mount retry failed.")
+				mount_dst.Close()
+				return nil, err
+			} else {
+				log.Warnf("Mount Retry succeeded")
+			}
 		}
 		//close todo: handle in FF
 
 		var f_dst *nfs.File
 		f_dst, err = target_dst.OpenFile(ff.file_name, os.FileMode(int(0644)))
 		if err != nil {
-			fmt.Printf("OpenFile %s failed\n", ff.file_name)
-			fmt.Println(err)
-			target_dst.Close()
-			mount_dst.Close()
-			return nil, err
+			log.Warn("OpenFile %s failed\n", ff.file_name)
+			log.Warnf("%s", err)
+			time.Sleep(time.Millisecond * 10)
+			f_dst, err = target_dst.OpenFile(ff.file_name, os.FileMode(int(0644)))
+			if err != nil {
+				log.Warnf("File Open retry failed.")
+				target_dst.Close()
+				mount_dst.Close()
+				return nil, err
+			} else {
+				log.Warnf("File Open Retry succeeded")
+			}
 		}
 		f_dst_wrapper := NewReadFromFileWrapper(f_dst)
 		return f_dst_wrapper, nil
@@ -282,11 +304,7 @@ func (ff *FlexFile) Open() (ReadWriteSeekerCloserReaderFrom, error) {
 	} else {
 		var f_dst *os.File
 		var err error
-		/*if ff.exists{
-			f_dst, err = os.Open(ff.file_full_path)
-		} else {
-			f_dst, err = os.Create(ff.file_full_path)
-		}*/
+
 		f_dst, err = os.OpenFile(ff.file_full_path, os.O_RDWR | os.O_CREATE, 0644)
 		
 		if err != nil {

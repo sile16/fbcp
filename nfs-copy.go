@@ -167,7 +167,8 @@ func (n *NFSInfo) copyOneFileChunk(offset uint64, num_bytes uint64, threadID int
 	// Open the source file.
 	f_src, err = n.src_ff.Open()
 	if err != nil {
-		fmt.Print("Error opening source file.")
+		log.Fatalf(" Thread %d Error opening source file: %s . \n Error: %s", 
+		             threadID, n.src_ff.file_full_path, err)
 		return
 	}
 	defer f_src.Close()
@@ -175,7 +176,8 @@ func (n *NFSInfo) copyOneFileChunk(offset uint64, num_bytes uint64, threadID int
 	// Open the Dest File
 	f_dst, err = n.dst_ff.Open()
 	if err != nil {
-		fmt.Print("Error opening destination file.")
+		log.Fatalf(" Thread %d Error opening destination file: %s . \n Error: %s", 
+		             threadID,n.dst_ff.file_full_path, err)
 		return
 	}
 	defer f_dst.Close()

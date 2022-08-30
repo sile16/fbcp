@@ -36,6 +36,7 @@ func main() {
 	stream := flag.Bool("stream", false, "Use the stream implementation")
 	plaid := flag.Bool("plaid", false, "use plaid copy stream")
 	progressPtr := flag.Bool("progress", false, "Show progress bars")
+	showmountsPtr := flag.Bool("showmounts", false, "Only Display Mounts")
 
 	flag.Parse()
 
@@ -52,6 +53,19 @@ func main() {
 	forceOutputStream := *forceOutputStreamPtr
 	hash := *hashPtr
 	
+	if *showmountsPtr{
+
+		mounts, _ := getMounts()
+		for _, mount_entry := range mounts{
+			fmt.Printf("Device: '%s'\n", mount_entry.device )
+			fmt.Printf("Mount Point: '%s'\n", mount_entry.mount_point)
+			fmt.Printf("Proto: %s, nfs %t , Nconnect: %t, nconnect_count: %d\n\n",
+				mount_entry.protocol, mount_entry.nfs,
+				mount_entry.nconnect, mount_entry.nconnect_value)
+
+		}
+		return
+	}
 
 	if *profile != "" {
         f, err := os.Create(*profile)
@@ -91,7 +105,7 @@ func main() {
 	//default_thread_used := false
 	coreCount := runtime.NumCPU()
 	if threads == 0 {
-		fmt.Printf("Found %d cores\n", coreCount)
+		log.Infof("Found %d cores\n", coreCount)
 		threads = coreCount * 2
 		//default_thread_used = true
 	}
@@ -246,6 +260,37 @@ func main() {
 		nfs.Stream()
 	} else {
 		
+		if !src_ff.is_nfs {
+			nfs_path := getNFSPathFromLocal(src_ff.file_full_path)
+			if nfs_path != "" {
+				log.Debugf("found local_path: %s, \n      at nfs_path: %s",
+			             src_ff.file_full_path, nfs_path)
+				new_nfs_ff, err := NewFlexFile(nfs_path)
+				if err != nil {
+					log.Debugf("Error creating flex file for %s", nfs_path)
+					log.Debug("Falling back to local path")
+				} else {
+					log.Debug("Changing src to direct NFS")
+					src_ff = new_nfs_ff
+				}
+			}
+		}
+
+		if !dst_ff.is_nfs {
+			nfs_path := getNFSPathFromLocal(dst_ff.file_full_path)
+			if nfs_path != "" {
+				log.Debugf("found local_path: %s, \n      at nfs_path: %s",
+			             dst_ff.file_full_path, nfs_path)
+				new_nfs_ff, err := NewFlexFile(nfs_path)
+				if err != nil {
+					log.Debugf("Error creating flex file for %s", nfs_path)
+					log.Debug("Falling back to local path")
+				} else {
+					log.Debug("Changing dst to direct NFS")
+					dst_ff = new_nfs_ff
+				}
+			}
+		}
 
 		nfs, err := NewNFSCopy(src_ff, dst_ff, threads, nodes, nodeID, uint64(sizeMB) * 1024 * 1024,
 			verify, *copyv2, *progressPtr)
