@@ -18,7 +18,7 @@
             "request": "launch",
             "mode": "debug",
             "program": "${workspaceFolder}",
-            "args": ["-threads", "16","-verify" ,"-verbose","tempdir/67108864", "../junk2"]
+            "args": ["-threads", "16","-verify" ,"-progress", "-verbose", "../junk1", "../junk2"]
         },
         {
             "name": "Local Spread Copy copyv2",

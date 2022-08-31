@@ -37,7 +37,8 @@ func NewNFSCopy(src_ff *FlexFile, dst_ff *FlexFile, concurrency int, nodes int, 
 		concurrency: concurrency, filesWritten: 0,
 		hashes:       make([][]byte, concurrency),
 		thread_bytes: make([]uint64, concurrency),
-		hash:         hash, copyv2: copyv2}
+		hash:         hash, copyv2: copyv2,
+		progress: progress,}
 
 	if !nfsNFSCopy.src_ff.exists {
 		log.Fatalf("Error: source fle %s doesn't exist", nfsNFSCopy.src_ff.file_name)
@@ -143,7 +144,7 @@ func (n *NFSInfo) SpreadCopy() (float64, []byte) {
 
 	total_mb_bytes := atomic.LoadUint64(&n.atm_counter_bytes_written) / (1024 * 1024)
 
-	fmt.Printf("Write Finished: Time: %f s , %d  MiB Transfered\n", elapsed.Seconds(), total_mb_bytes)
+	log.Infof("Write Finished: Time: %f s , %d  MiB Transfered\n", elapsed.Seconds(), total_mb_bytes)
 
 	return float64(total_mb_bytes) / (float64(elapsed.Seconds())), hashValue
 }
