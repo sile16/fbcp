@@ -101,6 +101,9 @@ func main() {
 	var src_ff *FlexFile
 	var dst_ff *FlexFile
 	var err error
+	var hashValueRead []byte
+	var hashValueWrite []byte
+	var copy_bytes_per_sec float64
 
 	//default_thread_used := false
 	coreCount := runtime.NumCPU()
@@ -110,13 +113,9 @@ func main() {
 		//default_thread_used = true
 	}
 
-	if hash {
-		//Same checks as benchamrk , single file check.
-		if flag.NArg() !=1 {
-			flag.Usage()
-			log.Fatal("Please provide a single test file.")
-		}
-
+	if hash && flag.NArg() == 1 {
+		//Same checks as benchamrk , single file passed, so we 
+		// Note that we can't do a streaming hash, as that is pointless just use xxhsum
 		if threads == 0 {
 			log.Fatalf("Threads must be specified for a correct hash.")
 		}
@@ -292,20 +291,52 @@ func main() {
 			}
 		}
 
+		if verify && !hash {
+			//have to hash the source to verify the destination file.
+			hash = true
+		}
+
 		nfs, err := NewNFSCopy(src_ff, dst_ff, threads, nodes, nodeID, uint64(sizeMB) * 1024 * 1024,
-			verify, *sendfile, *progressPtr)
+			hash, *sendfile, *progressPtr)
 		if err != nil {
 			log.Fatal(err)
 		}
 
 		log.Info("Running NFS MultiCopy.")
-		copy_bytes_per_sec, hashValueWrite := nfs.SpreadCopy()
-		fmt.Printf("Write Throughput = %f MiB/s\n", copy_bytes_per_sec)
-		if verify && hashValueWrite != nil{
+		copy_bytes_per_sec, hashValueWrite = nfs.SpreadCopy()
+		log.Infof("Write Throughput = %f MiB/s\n", copy_bytes_per_sec)
+		if hash && hashValueWrite != nil{
 			// add 1 to nodeID, to change from 0 Indexed to 1 indexed.
-			fmt.Printf("Spread Hash Threads: %d, Hash Node %d of %d ", threads, nodeID + 1, nodes)
-			fmt.Printf("       Hash: %x\n", hashValueWrite )
+			log.Infof("Source File Hash: %s", src_ff.file_full_path)
+			log.Infof("Spread Hash Threads: %d, Hash Node %d of %d ", threads, nodeID + 1, nodes)
+			log.Infof("       Hash: %x\n", hashValueWrite )
+		}
+
+		if verify {
+			dst_ff_verify, err := NewFlexFile(flag.Args()[1])
+			if err != nil {
+				log.Fatalf("Error opening destination file for verfication!, %s", err)
+			}
+
+			nfs, err := NewSpreadHash(dst_ff_verify, threads, nodes, nodeID, uint64(sizeMB) * 1024 *1024, *progressPtr)
+			if err != nil {
+				log.Fatal(err)
+			}
+
+			log.Infof("Reading back the destination file to verify hash.")
+			copy_bytes_per_sec, hashValueRead = nfs.SpreadHash()
+			log.Infof("Read Throughput = %f MiB/s\n", copy_bytes_per_sec)
+			log.Infof("Destination File Hash: %s", dst_ff_verify.file_full_path)
 			
+			// add 1 to nodeID, to change from 0 Indexed to 1 indexed.
+			log.Infof("Spread Hash Threads: %d, Hash Node %d of %d ", threads, nodeID + 1, nodes)
+			log.Infof("       Hash: %x\n", hashValueWrite )
+
+			if !bytes.Equal(hashValueRead, hashValueWrite) {
+				log.Fatal("Error bad DATA !!!!!!!!!!!! Hash mistmatch ")
+			} else {
+				log.Info("!! Data Validated !!  Hashes are correct.")
+			}
 		}
 	}
 }

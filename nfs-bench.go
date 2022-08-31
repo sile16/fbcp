@@ -11,17 +11,17 @@ import (
 	xxh3 "github.com/zeebo/xxh3"
 )
 
-func NewNFSBench(dst_ff *FlexFile, concurrency int, nodes int, nodeID int, sizeMB uint64, verify bool, zeros bool) (*NFSInfo, error) {
+func NewNFSBench(dst_ff *FlexFile, concurrency int, nodes int, nodeID int, sizeMB uint64, hash bool, zeros bool) (*NFSInfo, error) {
 	nodeOffset := uint64(nodeID) * uint64(concurrency) * sizeMB * 1024 * 1024
 
 	nfsBench := &NFSInfo{
 		concurrency: concurrency, filesWritten: 0, dst_ff: dst_ff,
 		hashes: make([][]byte, concurrency), sizeMB: sizeMB, nodeOffset: nodeOffset,
-		verify: verify, zeros: zeros}
+		hash: hash, zeros: zeros}
 
-    total_file_size := int64(nodes * concurrency * int(sizeMB) * 1024 * 1024)
+	total_file_size := int64(nodes * concurrency * int(sizeMB) * 1024 * 1024)
 	if !nfsBench.dst_ff.exists || nfsBench.dst_ff.size != uint64(total_file_size) {
-	//truncate
+		//truncate
 		dst_ff.Truncate(total_file_size)
 	}
 
@@ -104,7 +104,7 @@ func (n *NFSInfo) writeOneFileChunk(offset uint64, threadID int) {
 	fmt.Printf("Thread Write %d - Done !!!!!! \n", threadID)
 
 	// this relies on a 1MB buffer
-	if n.verify {
+	if n.hash {
 		for i := 0; uint64(i) < n.sizeMB; i++ {
 			hasher.Write(srcBuf)
 		}
@@ -147,7 +147,7 @@ func (n *NFSInfo) readOneFileChunk(offset uint64, threadID int) {
 
 	hasher := xxh3.New()
 	var hash_buff []byte
-	if n.verify {
+	if n.hash {
 		hash_buff = make([]byte, 1024*1024)
 	}
 	p := make([]byte, 1024*1024)
@@ -183,7 +183,7 @@ func (n *NFSInfo) readOneFileChunk(offset uint64, threadID int) {
 		}
 
 		// Verify the 1 MB Chunk
-		if n.verify {
+		if n.hash {
 			if byte_counter == 0 {
 				// we read the first 1MB chunk of the file, and that pattern is used over and over
 				copy(hash_buff, p)
@@ -212,7 +212,7 @@ func (n *NFSInfo) readOneFileChunk(offset uint64, threadID int) {
 	}
 
 	// this relies on a 1MB buffer
-	if n.verify {
+	if n.hash {
 		for i := 0; uint64(i) < n.sizeMB; i++ {
 			hasher.Write(hash_buff)
 		}

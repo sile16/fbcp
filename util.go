@@ -17,39 +17,39 @@ import (
 )
 
 type NFSInfo struct {
-	concurrency    int
-	hashes         [][]byte
-	thread_bytes   []uint64
+	concurrency  int
+	hashes       [][]byte
+	thread_bytes []uint64
 
-	sizeMB          uint64
-	nodeOffset      uint64
-	nodeSize        uint64
-	verify          bool
-	zeros           bool
-	copyv2          bool
-	plaid           bool
-	progress        bool
+	sizeMB     uint64
+	nodeOffset uint64
+	nodeSize   uint64
+	hash       bool
+	zeros      bool
+	copyv2     bool
+	plaid      bool
+	progress   bool
 
 	wg                        sync.WaitGroup
 	atm_finished              int32
 	atm_counter_bytes_written uint64
 	atm_counter_bytes_read    uint64
 	filesWritten              int
-	src_ff                     *FlexFile
-	dst_ff                     *FlexFile
+	src_ff                    *FlexFile
+	dst_ff                    *FlexFile
 }
 
 type ReadWriteSeekerCloser interface {
-    io.Reader
-    io.Writer
-    io.Seeker
+	io.Reader
+	io.Writer
+	io.Seeker
 	io.Closer
 }
 
 type ReadWriteSeekerCloserReaderFrom interface {
-    io.Reader
-    io.Writer
-    io.Seeker
+	io.Reader
+	io.Writer
+	io.Seeker
 	io.Closer
 	io.ReaderFrom
 }
@@ -63,7 +63,7 @@ type ReadFromFileWrapper struct {
 	fh ReadWriteSeekerCloser
 }
 
-func NewReadFromFileWrapper (nfs_file ReadWriteSeekerCloser) *ReadFromFileWrapper {
+func NewReadFromFileWrapper(nfs_file ReadWriteSeekerCloser) *ReadFromFileWrapper {
 	return &ReadFromFileWrapper{
 		fh: nfs_file,
 	}
@@ -88,40 +88,39 @@ func (fw *ReadFromFileWrapper) Close() error {
 func (fw *ReadFromFileWrapper) Seek(offset int64, whence int) (int64, error) {
 	return fw.fh.Seek(offset, whence)
 }
+
 ///////////////////////////////////////////////////////////////////
 ///////////////////////////////////////////////////////////////////
 
 type FlexFile struct {
-	
-	nfs_host  string
-	export  string
-	file_name string
-	file_path string
+	nfs_host       string
+	export         string
+	file_name      string
+	file_path      string
 	file_full_path string
 
-	exists bool
-	is_nfs bool
-	size uint64
+	exists       bool
+	is_nfs       bool
+	size         uint64
 	is_directory bool
-	is_pipe bool
-	is_os_file bool
-	pipe *os.File
-
+	is_pipe      bool
+	is_os_file   bool
+	pipe         *os.File
 }
 
 func NewFlexFilePipe(pipe *os.File) (*FlexFile, error) {
-	ff := FlexFile{size: 0, exists: false, 
-		is_directory: false, 
-		is_pipe: true, is_nfs: false, pipe: pipe, is_os_file: false,
-		file_name: pipe.Name(),}
+	ff := FlexFile{size: 0, exists: false,
+		is_directory: false,
+		is_pipe:      true, is_nfs: false, pipe: pipe, is_os_file: false,
+		file_name: pipe.Name()}
 
 	return &ff, nil
 }
 
-func NewFlexFile(file_path string ) (*FlexFile, error){
+func NewFlexFile(file_path string) (*FlexFile, error) {
 	ff := FlexFile{size: 0, exists: false, is_directory: false,
-		 is_pipe: false, is_os_file: false}
-	
+		is_pipe: false, is_os_file: false}
+
 	if strings.Contains(file_path, ":") {
 		ff.is_nfs = true
 
@@ -150,13 +149,13 @@ func NewFlexFile(file_path string ) (*FlexFile, error){
 			err := errors.New("[error] FlexFile Unable to mount export, ")
 			return &ff, err
 		}
-		defer target.Close() 
+		defer target.Close()
 
-		fsinfo, _ , err := target.Lookup(ff.file_name)
+		fsinfo, _, err := target.Lookup(ff.file_name)
 		if err != nil {
-			// File does'nt exist ? 
+			// File does'nt exist ?
 			ff.exists = false
-			
+
 			//fmt.Println(err)
 			return &ff, nil
 		}
@@ -169,14 +168,13 @@ func NewFlexFile(file_path string ) (*FlexFile, error){
 		return &ff, nil
 
 		//fsinfo := f.FSInfo()
-		
 
 	} else {
 		ff.is_nfs = false
 		ff.file_path = filepath.Dir(file_path)
 		ff.file_name = filepath.Base(file_path)
 		ff.file_full_path, _ = filepath.Abs(file_path)
-		
+
 		file_info, err := os.Stat(file_path)
 		if err != nil {
 			return &ff, nil
@@ -196,10 +194,10 @@ func NewFlexFile(file_path string ) (*FlexFile, error){
 	}
 }
 
-func (ff *FlexFile) Truncate(size int64 ) error {
+func (ff *FlexFile) Truncate(size int64) error {
 	if ff.pipe != nil {
 		return nil
-	} else if ff.is_nfs{
+	} else if ff.is_nfs {
 
 		mount_dst, err := nfs.DialMount(ff.nfs_host, true)
 		if err != nil {
@@ -214,7 +212,7 @@ func (ff *FlexFile) Truncate(size int64 ) error {
 		group_id := os.Getgid()
 
 		auth := rpc.NewAuthUnix(hostname, uint32(user_id), uint32(group_id))
-		
+
 		target_dst, err := mount_dst.Mount(ff.export, auth.Auth(), true)
 		if err != nil {
 			fmt.Println("Unable to mount.")
@@ -232,11 +230,10 @@ func (ff *FlexFile) Truncate(size int64 ) error {
 		}
 		return nil
 
-
 	} else {
 		return os.Truncate(ff.file_full_path, size)
 	}
-	
+
 }
 
 func (ff *FlexFile) Open() (ReadWriteSeekerCloserReaderFrom, error) {
@@ -265,7 +262,7 @@ func (ff *FlexFile) Open() (ReadWriteSeekerCloserReaderFrom, error) {
 		group_id := os.Getgid()
 
 		auth := rpc.NewAuthUnix(hostname, uint32(user_id), uint32(group_id))
-		
+
 		target_dst, err := mount_dst.Mount(ff.export, auth.Auth(), true)
 		if err != nil {
 			log.Warn("Unable to mount.")
@@ -305,14 +302,14 @@ func (ff *FlexFile) Open() (ReadWriteSeekerCloserReaderFrom, error) {
 		var f_dst *os.File
 		var err error
 
-		f_dst, err = os.OpenFile(ff.file_full_path, os.O_RDWR | os.O_CREATE, 0644)
-		
+		f_dst, err = os.OpenFile(ff.file_full_path, os.O_RDWR|os.O_CREATE, 0644)
+
 		if err != nil {
 			fmt.Printf("OpenFile %s failed\n", ff.file_full_path)
 			fmt.Println(err)
 			return nil, err
 		}
-		return  f_dst, nil
+		return f_dst, nil
 	}
 
 }
@@ -323,14 +320,14 @@ func (ff *FlexFile) ReadFrom(r io.Reader) (n int64, err error) {
 		return ff.pipe.ReadFrom(r)
 	} else if ff.is_nfs {
 		//return 0, errors.New("ReadFrom Not implemented for nfs")
-		return 
+		return
 	} else {
 		// we are a regular file at this point.
 		var f_dst *os.File
 		var err error
 
-		f_dst, err = os.OpenFile(ff.file_full_path, os.O_RDWR | os.O_CREATE, 0644)
-		
+		f_dst, err = os.OpenFile(ff.file_full_path, os.O_RDWR|os.O_CREATE, 0644)
+
 		if err != nil {
 			fmt.Printf("OpenFile %s failed\n", ff.file_full_path)
 			fmt.Println(err)
@@ -338,9 +335,8 @@ func (ff *FlexFile) ReadFrom(r io.Reader) (n int64, err error) {
 		}
 
 		return f_dst.ReadFrom(r)
-	} 
+	}
 }
-
 
 func ByteRateSI(b float64) string {
 	const unit = 1000
@@ -366,26 +362,26 @@ func getShortHostname() string {
 	return strings.ToLower(hostname)
 }
 
-func getThreadCount( size uint64, nodes uint64, bytes_per_thread uint64 ) uint64 {
-	
+func getThreadCount(size uint64, nodes uint64, bytes_per_thread uint64) uint64 {
+
 	if size == 0 {
 		return 1
 	}
 
 	// total threads across all nodes
 	threads := size / bytes_per_thread
-	remainder_bytes := threads * bytes_per_thread - size
+	remainder_bytes := threads*bytes_per_thread - size
 	if remainder_bytes > 0 {
-		threads ++
+		threads++
 	}
 
 	// Round thread count up to a mulitple of the node count.
-	threads_per_node := ( threads + ( nodes - 1 )) / nodes
-	
+	threads_per_node := (threads + (nodes - 1)) / nodes
+
 	return threads_per_node
 }
 
-func getBytesPerThread( size uint64, nodes int, concurrency int) uint64 {
+func getBytesPerThread(size uint64, nodes int, concurrency int) uint64 {
 	if size == 0 {
 		return min_thread_size
 	}
@@ -393,12 +389,12 @@ func getBytesPerThread( size uint64, nodes int, concurrency int) uint64 {
 	// Round up to nearest multiple of 1MB per thread across all nodes
 	// https://stackoverflow.com/questions/9303604/rounding-up-a-number-to-nearest-multiple-of-5
 
-	OneMB_per_thread_per_node := 1024 * 1024 * uint64(nodes * concurrency)
+	OneMB_per_thread_per_node := 1024 * 1024 * uint64(nodes*concurrency)
 
 	// this is the way to round up to a multiple of OneMB_per_thread_per_node
-	padded_size :=  (size + (OneMB_per_thread_per_node - 1 )) / OneMB_per_thread_per_node * OneMB_per_thread_per_node
+	padded_size := (size + (OneMB_per_thread_per_node - 1)) / OneMB_per_thread_per_node * OneMB_per_thread_per_node
 
-	bytes_per_thread := padded_size / uint64( nodes * concurrency)
+	bytes_per_thread := padded_size / uint64(nodes*concurrency)
 
 	// Check to make sure we are at the minimum
 	if bytes_per_thread < min_thread_size {

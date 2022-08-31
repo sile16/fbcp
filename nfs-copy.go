@@ -3,9 +3,9 @@ package main
 import (
 	"fmt"
 	"io"
+	"math/rand"
 	"sync/atomic"
 	"time"
-	"math/rand"
 
 	log "github.com/sirupsen/logrus"
 	xxh3 "github.com/zeebo/xxh3"
@@ -14,16 +14,16 @@ import (
 	"github.com/vbauerster/mpb/v7/decor"
 )
 
-func NewNFSCopy(src_ff *FlexFile, dst_ff *FlexFile, concurrency int, nodes int, nodeID int, 
-	bytes_per_thread uint64, verify bool, copyv2 bool, progress bool) (*NFSInfo, error) {
-	
+func NewNFSCopy(src_ff *FlexFile, dst_ff *FlexFile, concurrency int, nodes int, nodeID int,
+	bytes_per_thread uint64, hash bool, copyv2 bool, progress bool) (*NFSInfo, error) {
+
 	if bytes_per_thread == 0 {
 		bytes_per_thread = getBytesPerThread(src_ff.size, nodes, concurrency)
 	}
 
 	needed_threads_per_node := getThreadCount(src_ff.size, uint64(nodes), bytes_per_thread)
 
-	if  needed_threads_per_node < uint64(concurrency) {
+	if needed_threads_per_node < uint64(concurrency) {
 		//File is too small for this concurrency, we are reducing it.
 		concurrency = int(needed_threads_per_node)
 		log.Infof("Thread count reduced to %d because of a small file. ", concurrency)
@@ -35,9 +35,9 @@ func NewNFSCopy(src_ff *FlexFile, dst_ff *FlexFile, concurrency int, nodes int, 
 	nfsNFSCopy := &NFSInfo{
 		src_ff: src_ff, dst_ff: dst_ff,
 		concurrency: concurrency, filesWritten: 0,
-		hashes: make([][]byte, concurrency), 
+		hashes:       make([][]byte, concurrency),
 		thread_bytes: make([]uint64, concurrency),
-		verify: verify, copyv2: copyv2}
+		hash:         hash, copyv2: copyv2}
 
 	if !nfsNFSCopy.src_ff.exists {
 		log.Fatalf("Error: source fle %s doesn't exist", nfsNFSCopy.src_ff.file_name)
@@ -53,7 +53,6 @@ func NewNFSCopy(src_ff *FlexFile, dst_ff *FlexFile, concurrency int, nodes int, 
 		dst_ff.Truncate(int64(src_ff.size))
 	}
 
-	
 	// min each thread will get minimum of 16 MB of data
 	// this also handles small files gracefully.
 	if bytes_per_thread < min_thread_size {
@@ -85,7 +84,7 @@ func (n *NFSInfo) SpreadCopy() (float64, []byte) {
 
 	offset := n.nodeOffset
 
-	for i := 0; i < n.concurrency ; i++ {
+	for i := 0; i < n.concurrency; i++ {
 
 		// also we can't exceed the end of the file.
 		max_bytes_to_read := n.sizeMB
@@ -132,7 +131,7 @@ func (n *NFSInfo) SpreadCopy() (float64, []byte) {
 			break
 		}
 		log.Debugf("Thread %d hash: %x  offset: %d  bytes: %d",
-		                  i+1, n.hashes[i], n.nodeOffset + uint64(i) * n.sizeMB, n.thread_bytes[i])
+			i+1, n.hashes[i], n.nodeOffset+uint64(i)*n.sizeMB, n.thread_bytes[i])
 		hasher.Write(n.hashes[i])
 	}
 	var hashValue []byte
@@ -154,7 +153,7 @@ func (n *NFSInfo) copyOneFileChunk(offset uint64, num_bytes uint64, threadID int
 	defer n.wg.Done()
 
 	//sleep time between threads
-	//Avoids slamming server 
+	//Avoids slamming server
 	time.Sleep(time.Duration(threadID) * 2 * time.Millisecond)
 
 	max_bytes_to_read := num_bytes
@@ -167,8 +166,8 @@ func (n *NFSInfo) copyOneFileChunk(offset uint64, num_bytes uint64, threadID int
 	// Open the source file.
 	f_src, err = n.src_ff.Open()
 	if err != nil {
-		log.Fatalf(" Thread %d Error opening source file: %s . \n Error: %s", 
-		             threadID, n.src_ff.file_full_path, err)
+		log.Fatalf(" Thread %d Error opening source file: %s . \n Error: %s",
+			threadID, n.src_ff.file_full_path, err)
 		return
 	}
 	defer f_src.Close()
@@ -176,8 +175,8 @@ func (n *NFSInfo) copyOneFileChunk(offset uint64, num_bytes uint64, threadID int
 	// Open the Dest File
 	f_dst, err = n.dst_ff.Open()
 	if err != nil {
-		log.Fatalf(" Thread %d Error opening destination file: %s . \n Error: %s", 
-		             threadID,n.dst_ff.file_full_path, err)
+		log.Fatalf(" Thread %d Error opening destination file: %s . \n Error: %s",
+			threadID, n.dst_ff.file_full_path, err)
 		return
 	}
 	defer f_dst.Close()
@@ -213,7 +212,7 @@ func (n *NFSInfo) copyOneFileChunk(offset uint64, num_bytes uint64, threadID int
 				return
 			}
 		}
-		if n.verify {
+		if n.hash {
 			hasher.Write(srcBuf[0:n_bytes])
 		}
 
@@ -262,7 +261,7 @@ func (n *NFSInfo) copyOneFileChunkv2(offset uint64, num_bytes uint64, threadID i
 	defer n.wg.Done()
 
 	//sleep time between threads
-	//Avoids slamming server 
+	//Avoids slamming server
 	time.Sleep(time.Duration(threadID) * 2 * time.Millisecond)
 
 	var f_src ReadWriteSeekerCloser = nil
@@ -278,7 +277,7 @@ func (n *NFSInfo) copyOneFileChunkv2(offset uint64, num_bytes uint64, threadID i
 		log.Warnf("Thread %d will retry in %d miliseconds", threadID, sleepfor)
 		time.Sleep(time.Duration(sleepfor) * time.Millisecond)
 		f_src, err = n.src_ff.Open()
-		if err != nil{
+		if err != nil {
 			log.Fatalf("Error opening source file: %s", n.src_ff.file_full_path)
 		}
 	}
@@ -293,7 +292,7 @@ func (n *NFSInfo) copyOneFileChunkv2(offset uint64, num_bytes uint64, threadID i
 		log.Warnf("Thread %d will retry in %d miliseconds", threadID, sleepfor)
 		time.Sleep(time.Duration(sleepfor) * time.Millisecond)
 		f_dst, err = n.dst_ff.Open()
-		if err != nil{
+		if err != nil {
 			log.Fatalf("Error opening destination file: %s", n.dst_ff.file_full_path)
 		}
 	}
