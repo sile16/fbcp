@@ -337,6 +337,8 @@ func main() {
 			} else {
 				log.Info("!! Data Validated !!  Hashes are correct.")
 			}
+		} else if hash {
+			log.Info("Only source file hashed, destination file NOT checked, use -verify to automatically check destination file.")
 		}
 	}
 }

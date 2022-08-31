@@ -15,7 +15,7 @@ Please hash your source and destination files to ensure file integrity.  While t
 
 ## Usage
 
-4 main modes of operation that are completley seperate, -benchmark, 
+4 main modes of operation that are completley seperate, file copy mode, streaming mode, hash and benchmark.
 
 ```
 Usage of ./fbcp/fbcp_mac:
@@ -95,9 +95,9 @@ Uses the XXH3 hash algorithm which is extremely fast and close to cryptographicl
 
 If you specify -hash with a single file, it will hash that file.  
 
-If you specify -hash with a file copy, it will hash the source file as it's written.
+If you specify -hash with a file copy, it will hash the source file as it's read.
 
-If you specify -verify with a file copy, it will copy the file and read back the copied file and verify the hashes.
+If you specify -verify with a file copy, it will copy the file hashing as it's reading and read back the copied file and verify the hashes.
 
 Use hashing to verify the files we tar'ed and untar'ed in the previous example.
 
@@ -130,6 +130,6 @@ env GOOS=linux GARCH=amd64  go build -o fbcp_linux
  - Benchmark streaming performance.
  - breakout benchmark into it's own binary
  - breakout hash into it's own binary.
- 
+
 
 
