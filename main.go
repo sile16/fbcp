@@ -32,7 +32,7 @@ func main() {
 	forceInputStreamPtr := flag.Bool("force-input-stream", false, "Treat input file like a stream.")
 	forceOutputStreamPtr := flag.Bool("force-output-stream", false, "Treat output file like a stream.")
 	profile := flag.String("profile", "", "write cpu profile to specified file")
-	copyv2 := flag.Bool("copyv2", false, "Use the io.copyN impklementiontation")
+	sendfile := flag.Bool("sendfile", false, "Use the io.copyN impklementiontation")
 	stream := flag.Bool("stream", false, "Use the stream implementation")
 	plaid := flag.Bool("plaid", false, "use plaid copy stream")
 	progressPtr := flag.Bool("progress", false, "Show progress bars")
@@ -293,7 +293,7 @@ func main() {
 		}
 
 		nfs, err := NewNFSCopy(src_ff, dst_ff, threads, nodes, nodeID, uint64(sizeMB) * 1024 * 1024,
-			verify, *copyv2, *progressPtr)
+			verify, *sendfile, *progressPtr)
 		if err != nil {
 			log.Fatal(err)
 		}

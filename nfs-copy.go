@@ -304,13 +304,12 @@ func (n *NFSInfo) copyOneFileChunkv2(offset uint64, num_bytes uint64, threadID i
 
 	log.Debugf("Starting Thread %d using ReadFrom", threadID)
 
-	// this is may be faster on Linux, but on mac is 20% slower on large files
+	// this may be faster on Linux, but on mac is 20% slower on large files
 	//  because linux implements sendfile
 	bytes_written, err := f_dst.ReadFrom(io.LimitReader(f_src, int64(num_bytes)))
 
 	//testing vs copyv1, way more simple, but is it faster?
 	//bytes_written, err := io.CopyN(f_dst, f_src, int64(num_bytes))
-
 	if err != nil {
 		log.Fatalf("Only Copied %d bytes in thread %d, at offset %d , Error: %s", bytes_written, threadID, offset, err)
 	}
