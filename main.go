@@ -54,6 +54,12 @@ func main() {
 	forceInputStream := *forceInputStreamPtr
 	forceOutputStream := *forceOutputStreamPtr
 	hash := *hashPtr
+
+	if verbose{ 
+		log.SetLevel(log.DebugLevel)
+	} else {
+		log.SetLevel(log.InfoLevel)
+	}
 	
 	if *showmountsPtr{
 
@@ -79,11 +85,7 @@ func main() {
         defer pprof.StopCPUProfile()
     }
 
-	if verbose{ 
-		log.SetLevel(log.DebugLevel)
-	} else {
-		log.SetLevel(log.InfoLevel)
-	}
+	
 
 	pi, _ := os.Stdin.Stat() // get the FileInfo struct describing the standard input.
 	po, _ := os.Stdout.Stat() // get the FileInfo struct describing the standard input.
