@@ -94,8 +94,8 @@ func getMounts() ([]MountEntry, error) {
 
 		if runtime.GOOS == "linux" {
 			items := strings.Split(line, " ")
-			if len(items) != 4 {
-				log.Warnf("Unexpected items in mount line, expected 4, found %d, \n line: %s", len(items), line)
+			if len(items) < 4 || len(items) > 6 {
+				log.Warnf("Unexpected items in mount line, expected 4-6, found %d, \n line: %s", len(items), line)
 				skip = true
 
 			} else {
