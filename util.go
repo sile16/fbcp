@@ -302,6 +302,7 @@ func (ff *FlexFile) Open() (ReadWriteSeekerCloserReaderFrom, error) {
 		var f_dst *os.File
 		var err error
 
+		//todo: create with correct mode mits based on source file.
 		f_dst, err = os.OpenFile(ff.file_full_path, os.O_RDWR|os.O_CREATE, 0644)
 
 		if err != nil {
@@ -318,9 +319,12 @@ func (ff *FlexFile) ReadFrom(r io.Reader) (n int64, err error) {
 
 	if ff.is_pipe {
 		return ff.pipe.ReadFrom(r)
+
 	} else if ff.is_nfs {
+		//todo implement readfrom in NFS client.
 		//return 0, errors.New("ReadFrom Not implemented for nfs")
 		return
+		
 	} else {
 		// we are a regular file at this point.
 		var f_dst *os.File
