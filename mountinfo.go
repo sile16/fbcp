@@ -100,10 +100,18 @@ func getMounts() ([]MountEntry, error) {
 				skip = true
 
 			} else {
-				//log.Debugf("%s %s %s %s", items[0], items[1], items[2], items[3])	
-				
-				mount_entry.device = items[0]
-				mount_entry.mount_point = items[1]
+				//	log.Debugf("%s %s %s %s", items[0], items[1], items[2], items[3])	
+				var err error
+				mount_entry.device, err = strconv.Unquote(items[0])
+				if err != nil {
+					log.Debugf("conveting device %s failed, results %s", items[0],mount_entry.device)
+					log.Debug(err)
+				}
+				mount_entry.mount_point, err = strconv.Unquote(items[1])
+				if err != nil {
+					log.Debugf("conveting mount point %s failed, results %s", items[1],mount_entry.mount_point)
+					log.Debug(err)
+				}
 				mount_entry.protocol = items[2]
 				mount_entry.options = items[3]
 			}
