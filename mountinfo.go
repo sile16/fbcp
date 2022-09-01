@@ -88,6 +88,7 @@ func getMounts() ([]MountEntry, error) {
         // do something with a line
 		// this will unquote spaces and apostrophes /040 
         line := scanner.Text()
+		log.Debugf("%s", line)
 
 		var mount_entry MountEntry
 		skip := false
