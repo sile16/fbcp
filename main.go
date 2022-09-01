@@ -33,6 +33,8 @@ func main() {
 	forceOutputStreamPtr := flag.Bool("force-output-stream", false, "Treat output file like a stream.")
 	profile := flag.String("profile", "", "write cpu profile to specified file")
 	sendfile := flag.Bool("sendfile", false, "Use the io.copyN impklementiontation")
+	no_src_direct_nfs_Ptr := flag.Bool("no-src-direct-nfs", false, "Do not try direct nfs to source")
+	no_dst_direct_nfs_Ptr := flag.Bool("no-dst-direct-nfs", false, "Do not try direct nfs to destination")
 	stream := flag.Bool("stream", false, "Use the stream implementation")
 	plaid := flag.Bool("plaid", false, "use plaid copy stream")
 	progressPtr := flag.Bool("progress", false, "Show progress bars")
@@ -224,6 +226,38 @@ func main() {
 		os.Exit(1)
 	}
 
+	if !src_ff.is_nfs && !*no_src_direct_nfs_Ptr{
+		nfs_path := getNFSPathFromLocal(src_ff.file_full_path)
+		if nfs_path != "" {
+			log.Debugf("found local_path: %s, \n      at nfs_path: %s",
+					 src_ff.file_full_path, nfs_path)
+			new_nfs_ff, err := NewFlexFile(nfs_path)
+			if err != nil {
+				log.Debugf("Error creating flex file for %s", nfs_path)
+				log.Debug("Falling back to local path")
+			} else {
+				log.Debug("Changing src to direct NFS")
+				src_ff = new_nfs_ff
+			}
+		}
+	}
+
+	if !dst_ff.is_nfs && !*no_dst_direct_nfs_Ptr{
+		nfs_path := getNFSPathFromLocal(dst_ff.file_full_path)
+		if nfs_path != "" {
+			log.Debugf("found local_path: %s, \n      at nfs_path: %s",
+					 dst_ff.file_full_path, nfs_path)
+			new_nfs_ff, err := NewFlexFile(nfs_path)
+			if err != nil {
+				log.Debugf("Error creating flex file for %s", nfs_path)
+				log.Debug("Falling back to local path")
+			} else {
+				log.Debug("Changing dst to direct NFS")
+				dst_ff = new_nfs_ff
+			}
+		}
+	}
+
 	// this will use the code like it's reading from stdin
 	if forceInputStream {
 		log.Debug("Forcing input to streaming")
@@ -258,38 +292,6 @@ func main() {
 		log.Info("Running a Stream Copy.")
 		nfs.Stream()
 	} else {
-		
-		if !src_ff.is_nfs {
-			nfs_path := getNFSPathFromLocal(src_ff.file_full_path)
-			if nfs_path != "" {
-				log.Debugf("found local_path: %s, \n      at nfs_path: %s",
-			             src_ff.file_full_path, nfs_path)
-				new_nfs_ff, err := NewFlexFile(nfs_path)
-				if err != nil {
-					log.Debugf("Error creating flex file for %s", nfs_path)
-					log.Debug("Falling back to local path")
-				} else {
-					log.Debug("Changing src to direct NFS")
-					src_ff = new_nfs_ff
-				}
-			}
-		}
-
-		if !dst_ff.is_nfs {
-			nfs_path := getNFSPathFromLocal(dst_ff.file_full_path)
-			if nfs_path != "" {
-				log.Debugf("found local_path: %s, \n      at nfs_path: %s",
-			             dst_ff.file_full_path, nfs_path)
-				new_nfs_ff, err := NewFlexFile(nfs_path)
-				if err != nil {
-					log.Debugf("Error creating flex file for %s", nfs_path)
-					log.Debug("Falling back to local path")
-				} else {
-					log.Debug("Changing dst to direct NFS")
-					dst_ff = new_nfs_ff
-				}
-			}
-		}
 
 		if verify && !hash {
 			//have to hash the source to verify the destination file.
