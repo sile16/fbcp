@@ -99,6 +99,7 @@ func getMounts() ([]MountEntry, error) {
 				skip = true
 
 			} else {
+				log.Debug(items)
 				
 				mount_entry.device, _ = strconv.Unquote(items[0])
 				mount_entry.mount_point, _ = strconv.Unquote(items[1])
