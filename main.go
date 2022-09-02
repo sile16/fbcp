@@ -14,6 +14,9 @@ import (
 )
 
 const min_thread_size uint64 = uint64(16) * 1024 * 1024
+const default_stream_sizeMB int64 = 64
+const max_stream_memG int64 = 4
+const min_stream_sizeMB int64 = 16
 
 
 func main() {
@@ -286,7 +289,24 @@ func main() {
 	if pipein || pipeout || *stream {
 		log.Debugf("sourc: %t\n", src_ff.is_pipe)
 		log.Debugf("dest:  %t\n", dst_ff.is_pipe)
-		nfs, err := NewNFSStream(src_ff, dst_ff, threads, *plaid)
+
+		// do an auto sizing of sizeMB
+		if sizeMB == 0 {
+			sizeMB = int64(default_stream_sizeMB)
+
+			if sizeMB * int64(threads) > max_stream_memG * 1024 {
+				sizeMB = max_stream_memG * 1024 / int64(threads)
+				log.Debug("Limiting sizeMB to be below max memory of %dG", max_stream_memG)
+				// Round DOWN to nearest 16MB
+				sizeMB = ( sizeMB / min_stream_sizeMB ) * min_stream_sizeMB
+				if sizeMB <= 0 {
+					sizeMB = min_stream_sizeMB
+				}
+			}
+			log.Debug(" sizeMB was not specificed setting to: ", sizeMB)
+		}
+
+		nfs, err := NewNFSStream(src_ff, dst_ff, threads, *plaid, uint64(sizeMB))
 		if err != nil {
 			fmt.Println(err)
 			return

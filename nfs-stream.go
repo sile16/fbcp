@@ -8,7 +8,7 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
-func NewNFSStream(src_ff *FlexFile, dst_ff *FlexFile, concurrency int, plaid bool ) (*NFSInfo, error) {
+func NewNFSStream(src_ff *FlexFile, dst_ff *FlexFile, concurrency int, plaid bool, sizeMB uint64 ) (*NFSInfo, error) {
 
 	n := &NFSInfo{ 
 		src_ff: src_ff, dst_ff:dst_ff,
@@ -23,7 +23,7 @@ func NewNFSStream(src_ff *FlexFile, dst_ff *FlexFile, concurrency int, plaid boo
 		dst_ff.Truncate(int64(src_ff.size))
 	} 
 
-	n.sizeMB = uint64(1) * 1024 * 1024
+	n.sizeMB = sizeMB * 1024 * 1024
 	
 	return n, nil
 }

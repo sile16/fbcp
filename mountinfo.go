@@ -159,11 +159,13 @@ func getMounts() ([]MountEntry, error) {
 						}
 					}
 				}
+				// Log only nfs mounts;
+				log.Debugf("Device: %s Mount Point: %s , Proto: %s, nfs %b, nconnect: %b",
+						mount_entry.device, mount_entry.mount_point, mount_entry.protocol, 
+						mount_entry.nfs, mount_entry.nconnect)
 			}
 
-			log.Debugf("Device: %s Mount Point: %s , Proto: %s, nfs %b, nconnect: %b",
-				mount_entry.device, mount_entry.mount_point, mount_entry.protocol, 
-				mount_entry.nfs, mount_entry.nconnect)
+			
 
 			mount_entries_global = append(mount_entries_global, mount_entry)
 		}
