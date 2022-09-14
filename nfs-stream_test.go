@@ -5,16 +5,17 @@ import (
 	"os"
 	"testing"
 
-	log "github.com/sirupsen/logrus"
+	//log "github.com/sirupsen/logrus"
 )
 
 
 
 func BenchmarkStreamRead(b *testing.B) {
 
-	log.SetLevel(log.DebugLevel)
+	//log.SetLevel(log.DebugLevel)
 
 	var test_file_name = os.Getenv("TEST_FILE")
+	
 	if test_file_name == "" {
 		test_file_name = "../junk10"
 	}

@@ -100,7 +100,7 @@ func benchamrk(c fbcp_config ){
 	var write_bytes_per_sec float64
 	var hashValueWrite []byte
 	if !c.readOnly{
-		log.Info("Running NFS write test.")
+		log.Debug("Running NFS write test.")
 		write_bytes_per_sec, hashValueWrite = nfs_bench.WriteTest()
 	}
 
@@ -175,7 +175,7 @@ func fbcp_stream_copy(c fbcp_config, src_ff *FlexFile, dst_ff *FlexFile) {
 		fmt.Println(err)
 		return
 	}
-	log.Info("Running a Stream Copy.")
+	log.Debug("Running a Stream Copy.")
 	nfs.Stream()
 }
 
