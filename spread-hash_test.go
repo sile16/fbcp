@@ -45,12 +45,12 @@ var hash_tests = []struct {
 	{"64MB +1", 64 * MB + 1,1,  "0cc5a528bcb8f3a7"},
 	{"512MB",512 * MB,1,  "1c880af72d4f961b"},
 	{"2G", 2048 * MB,1,   "a9d152f0af30f080"},
-	{"2G -1", 2048 * MB - 1, 1,"537de2e155f4b9e5"},
-
-	
+	{"2G -1", 2048 * MB - 1, 1,"537de2e155f4b9e5"}, 
 }
 
 func create_tmp_file(t *testing.T, file_size uint64, buf []byte)  {
+
+	
 
 	file_path := filepath.Join("tempdir", strconv.FormatUint(file_size, 10))
 	f, err := os.Create(file_path)
@@ -69,7 +69,6 @@ func create_tmp_file(t *testing.T, file_size uint64, buf []byte)  {
 		if err != nil{
 			panic(err)
 		}
-
 		written += uint64(n_bytes)
 	}	
 }

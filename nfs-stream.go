@@ -12,7 +12,7 @@ func NewNFSStream(src_ff *FlexFile, dst_ff *FlexFile, concurrency int, plaid boo
 
 	n := &NFSInfo{ 
 		src_ff: src_ff, dst_ff:dst_ff,
-		concurrency: concurrency, filesWritten: 0, plaid: plaid}
+		concurrency: concurrency, filesWritten: 0, plaid: plaid,}
 
 	if  dst_ff.is_directory {
 		log.Fatal("Destination file is a directory.")

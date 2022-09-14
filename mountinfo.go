@@ -32,24 +32,25 @@ type MountEntry struct {
 
 var mount_entries_global []MountEntry = nil
 
-func getNFSPathFromLocal(local_path string) ( string ) {
+func getNFSPathFromLocal(local_path string) ( string, MountEntry ) {
 
 	getMounts()
-	
-	//sort the array based on path depth
-	sort.Slice(mount_entries_global[:], func(i, j int) bool {
-		return mount_entries_global[i].mount_point_depth > mount_entries_global[j].mount_point_depth
-	  })
 	
 	for _, v := range mount_entries_global{
 		if v.nfs {
 			if strings.HasPrefix(local_path, v.mount_point) {
-				return strings.Replace(local_path, v.mount_point, v.device, 1)
-			}
+				new_path := strings.Replace(local_path, v.mount_point, v.device, 1)
+	
+				log.Debugf("found local_path: %s, \n      at nfs_path: %s",
+							local_path, new_path)
+
+				return new_path, v
+			} 
 		}
 	}
-	return ""
+	return "", MountEntry{}
 }
+
 
 
 func getMounts() ([]MountEntry, error) {
@@ -100,7 +101,6 @@ func getMounts() ([]MountEntry, error) {
 				skip = true
 
 			} else {
-				//	log.Debugf("%s %s %s %s", items[0], items[1], items[2], items[3])	
 				var err error
 				mount_entry.device, err = strconv.Unquote(`"` + items[0] + `"`)
 				if err != nil {
@@ -146,7 +146,7 @@ func getMounts() ([]MountEntry, error) {
 			mount_entry.mount_point_depth = c
 
 
-			if strings.ToLower(mount_entry.protocol) == "nfs"{
+			if strings.ToLower(mount_entry.protocol) == "nfs" {
 				mount_entry.nfs = true
 
 				for _, v := range strings.Split(mount_entry.options, ",") {
@@ -160,16 +160,19 @@ func getMounts() ([]MountEntry, error) {
 					}
 				}
 				// Log only nfs mounts;
-				log.Debugf("Device: %s Mount Point: %s , Proto: %s, nfs %b, nconnect: %b",
+				log.Debugf("Device: %s Mount Point: %s , Proto: %s, nfs %t, nconnect: %t",
 						mount_entry.device, mount_entry.mount_point, mount_entry.protocol, 
 						mount_entry.nfs, mount_entry.nconnect)
 			}
 
-			
-
 			mount_entries_global = append(mount_entries_global, mount_entry)
 		}
     }
+
+	//sort the array based on path depth
+	sort.Slice(mount_entries_global[:], func(i, j int) bool {
+		return mount_entries_global[i].mount_point_depth > mount_entries_global[j].mount_point_depth
+	  })
 
 	return mount_entries_global, nil
 }

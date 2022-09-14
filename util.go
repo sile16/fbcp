@@ -93,11 +93,13 @@ func (fw *ReadFromFileWrapper) Seek(offset int64, whence int) (int64, error) {
 ///////////////////////////////////////////////////////////////////
 
 type FlexFile struct {
-	nfs_host       string
-	export         string
-	file_name      string
-	file_path      string
-	file_full_path string
+	nfs_host        string
+	export          string
+	file_name       string
+	file_path       string
+	file_full_path  string
+	direct_nfs_path string
+	mount_info      MountEntry
 
 	exists       bool
 	is_nfs       bool
@@ -187,6 +189,9 @@ func NewFlexFile(file_path string) (*FlexFile, error) {
 		} else {
 			ff.is_os_file = true
 		}
+
+		ff.direct_nfs_path, ff.mount_info = getNFSPathFromLocal(ff.file_full_path)
+		
 
 		//todo: get mode bits here
 
@@ -282,7 +287,7 @@ func (ff *FlexFile) Open() (ReadWriteSeekerCloserReaderFrom, error) {
 		var f_dst *nfs.File
 		f_dst, err = target_dst.OpenFile(ff.file_name, os.FileMode(int(0644)))
 		if err != nil {
-			log.Warn("OpenFile %s failed\n", ff.file_name)
+			log.Warnf("OpenFile %s failed\n", ff.file_name)
 			log.Warnf("%s", err)
 			time.Sleep(time.Millisecond * 10)
 			f_dst, err = target_dst.OpenFile(ff.file_name, os.FileMode(int(0644)))
@@ -304,6 +309,8 @@ func (ff *FlexFile) Open() (ReadWriteSeekerCloserReaderFrom, error) {
 
 		//todo: create with correct mode mits based on source file.
 		f_dst, err = os.OpenFile(ff.file_full_path, os.O_RDWR|os.O_CREATE, 0644)
+
+
 
 		if err != nil {
 			fmt.Printf("OpenFile %s failed\n", ff.file_full_path)
@@ -406,4 +413,27 @@ func getBytesPerThread(size uint64, nodes int, concurrency int) uint64 {
 	}
 
 	return bytes_per_thread
+}
+
+
+func NewFlexFileDirectNFS(ff *FlexFile) *FlexFile {
+	
+
+	//Todo: check is nconnect is avaialbe which is best perf?
+	if ff.direct_nfs_path != "" {
+		new_nfs_ff, err := NewFlexFile(ff.direct_nfs_path)
+		if err != nil {
+			log.Debugf("Error creating flex file for %s", ff.direct_nfs_path)
+			log.Debug("Falling back to local path")
+			return ff
+		} else {
+			log.Debug("Changing src to direct NFS")
+			//todo: close old file
+			//ff.Close()
+			return new_nfs_ff
+		}
+	
+	}
+	return ff
+
 }
