@@ -33,8 +33,8 @@ func BenchmarkStreamRead(b *testing.B) {
 	filesizeG := ff_src.size / (1024 ^ 3)
 
 	
-	threads := []int{1, 4, 8, 16}
-	sizeMB := []int64{4, 16, 32, 64, 128, 256, 512, 1024}
+	threads := []int{4, 8, 12, 16}
+	sizeMB := []int64{2, 4, 8, 16, 32, 64}
 	
 	for _, thread := range threads {
 		for _, size := range sizeMB {
