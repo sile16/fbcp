@@ -13,8 +13,8 @@ import (
 )
 
 const min_thread_size uint64 = uint64(16) * 1024 * 1024
-const default_stream_sizeMB int64 = 64
-const min_stream_sizeMB int64 = 16
+const default_stream_sizeMB int64 = 8
+const min_stream_sizeMB int64 = 4
 var max_stream_memG int64 = 8
 
 
@@ -168,6 +168,10 @@ func fbcp_stream_copy(c fbcp_config, src_ff *FlexFile, dst_ff *FlexFile) {
 			}
 		}
 		log.Debug(" sizeMB was not specificed setting to: ", c.sizeMB)
+	}
+
+	if c.threads == 0 {
+		c.threads = 16
 	}
 
 	nfs, err := NewNFSStream(src_ff, dst_ff, c.threads, c.plaid, uint64(c.sizeMB))
