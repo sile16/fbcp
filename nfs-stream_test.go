@@ -3,8 +3,8 @@ package main
 import (
 	"fmt"
 	"os"
+	"os/exec"
 	"testing"
-
 	//log "github.com/sirupsen/logrus"
 )
 
@@ -33,14 +33,17 @@ func BenchmarkStreamRead(b *testing.B) {
 	filesizeG := ff_src.size / (1024 ^ 3)
 
 	
-	threads := []int{4, 8, 12, 16}
-	sizeMB := []int64{2, 4, 8, 16, 32, 64}
+	threads := []int{8, 12, 16}
+	sizeMB := []int64{4, 8, 16, 32}
 	
 	for _, thread := range threads {
 		for _, size := range sizeMB {
 
+			//run command on shell
 			
-			testname := fmt.Sprintf("%dG, %d threads, %d sizeMB, DirectNFS %t", filesizeG, thread, size, ff_src.is_nfs)
+
+			
+			testname := fmt.Sprintf("%dG, %d threads, %d sizeMB", filesizeG, thread, size )
 	
 			c := fbcp_config{	forceInputStream : false,
 								forceOutputStream : true,
@@ -49,6 +52,8 @@ func BenchmarkStreamRead(b *testing.B) {
 
 			for n := 0; n < b.N; n++ {
 				b.Run(testname, func (b *testing.B) {
+					exec.Command("bash", "-c", "echo 3 > /proc/sys/vm/drop_caches").Run()
+					b.ResetTimer()
 					fbcp_stream_copy(c, ff_src, ff_dst) 
 
 				})
