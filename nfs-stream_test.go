@@ -3,7 +3,9 @@ package main
 import (
 	"fmt"
 	"os"
-	"os/exec"
+	"time"
+
+	//"os/exec"
 	"testing"
 	//log "github.com/sirupsen/logrus"
 )
@@ -52,8 +54,14 @@ func BenchmarkStreamRead(b *testing.B) {
 
 			for n := 0; n < b.N; n++ {
 				b.Run(testname, func (b *testing.B) {
-					exec.Command("bash", "-c", "echo", "3", ">", "/proc/sys/vm/drop_caches").Run()
+					//exec.Command("bash", "-c", "echo", "3", ">", "/proc/sys/vm/drop_caches").Run()
+					data := []byte("3")
+					os.WriteFile("/proc/sys/vm/drop_caches", data, 0644)
+
+					//sleep for 2 second
+					time.Sleep(2 * time.Second)
 					b.ResetTimer()
+					
 					fbcp_stream_copy(c, ff_src, ff_dst) 
 
 				})
