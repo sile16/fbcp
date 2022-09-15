@@ -52,7 +52,7 @@ func BenchmarkStreamRead(b *testing.B) {
 
 			for n := 0; n < b.N; n++ {
 				b.Run(testname, func (b *testing.B) {
-					exec.Command("bash", "-c", "echo 3 > /proc/sys/vm/drop_caches").Run()
+					exec.Command("bash", "-c", "echo", "3", ">", "/proc/sys/vm/drop_caches").Run()
 					b.ResetTimer()
 					fbcp_stream_copy(c, ff_src, ff_dst) 
 
