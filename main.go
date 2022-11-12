@@ -134,6 +134,7 @@ func benchamrk(c fbcp_config ){
 func showmounts() {
 
 	mounts, _ := getMounts()
+	
 	for _, mount_entry := range mounts{
 		fmt.Printf("Device: '%s'\n", mount_entry.device )
 		fmt.Printf("Mount Point: '%s'\n", mount_entry.mount_point)

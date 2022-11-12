@@ -23,6 +23,7 @@ type MountEntry struct {
 	protocol          string
 	options           string
 	blk_id            string
+	ip				  string
 
 	//add for ease of use
 	nfs            bool //golang default of bool is false.
@@ -65,7 +66,14 @@ func AddMountBlk_id() {
 	for scanner.Scan() {
 		// read each line
 		line := scanner.Text()
+
+		// skip non nfs entries
+		if strings.Contains(line, "nfs") {
+			continue
+		}
+		
 		fields := strings.Fields(line)
+	
 
 		// search for mating mount entry
 		var me *MountEntry = nil
@@ -186,6 +194,8 @@ func getMounts() ([]MountEntry, error) {
 
 			if strings.ToLower(mount_entry.protocol) == "nfs" {
 				mount_entry.nfs = true
+
+				mount_entry.ip = strings.Split(mount_entry.device, ":")[0]
 
 				for _, v := range strings.Split(mount_entry.options, ",") {
 					//Example: rw,relatime,vers=3,nconnect=12

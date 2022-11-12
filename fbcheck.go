@@ -51,7 +51,7 @@ func sysctl_check_value (name string, value string) (bool, error) {
 	if set_value == value {
 		return true, nil
 	} else {
-		log.Errorf("sysctl %s is %d, expected %d", name, set_value, value)
+		log.Errorf("sysctl %s is %s, expected %s", name, set_value, value)
 		return false, nil
 	}
 }
