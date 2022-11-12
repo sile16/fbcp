@@ -46,6 +46,8 @@ type fbcp_config struct {
 	no_dst_direct_nfs bool
 	plaid bool
 	progress bool
+	checkmount bool
+	fix bool
 }
 
 
@@ -141,6 +143,8 @@ func showmounts() {
 
 	}
 }
+
+
 
 func fbcp_stream_copy(c fbcp_config, src_ff *FlexFile, dst_ff *FlexFile) {
 	log.Debugf("sourc: %t\n", src_ff.is_pipe)
@@ -365,11 +369,15 @@ func main() {
 	flag.BoolVar(&c.plaid, "plaid", false, "use plaid copy stream")
 	flag.BoolVar(&c.progress, "progress", false, "Show progress bars")
 	flag.BoolVar(&c.showmounts, "showmounts", false, "Only Display Mounts")
+	flag.BoolVar(&c.checkmount, "checkmount", false, "Check Mount settings")
+	flag.BoolVar(&c.fix, "fix", false, "Fix Mount settings")
+
 
 	//internally nodeID is 0 indexed, but for command line it's 1 indexed
 	c.nodeID--
 
 	flag.Parse()
+
 
 	if c.verbose{ 
 		log.SetLevel(log.DebugLevel)
@@ -386,6 +394,11 @@ func main() {
         pprof.StartCPUProfile(f)
         defer pprof.StopCPUProfile()
     }
+
+	if c.checkmount {
+		fbcheck(c)
+		os.Exit(0)
+	}
 
 	if c.nodes > 1 && c.threads == 0{
 		log.Fatal("Missing threads param, required when using more than 1 node")

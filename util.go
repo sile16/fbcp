@@ -54,23 +54,24 @@ type ReadWriteSeekerCloserReaderFrom interface {
 	io.ReaderFrom
 }
 
-///////////////////////////////////////////////////////////////////
+// /////////////////////////////////////////////////////////////////
 // Adding the Readfrom function, so that I can use os.file readfrom.
 // which on linux implements the sendfile function for high perf
 // so, all NFS calls, even if not REadFrom go through this wrapper
 // I wouldn't think it makes a difference
 type ReadFromFileWrapper struct {
-	fh ReadWriteSeekerCloser
+	fh ReadWriteSeekerCloserReaderFrom
 }
 
-func NewReadFromFileWrapper(nfs_file ReadWriteSeekerCloser) *ReadFromFileWrapper {
+func NewReadFromFileWrapper(nfs_file ReadWriteSeekerCloserReaderFrom) *ReadFromFileWrapper {
 	return &ReadFromFileWrapper{
 		fh: nfs_file,
 	}
 }
 
 func (fw *ReadFromFileWrapper) ReadFrom(r io.Reader) (n int64, err error) {
-	return io.Copy(fw.fh, r)
+	//return io.Copy(fw.fh, r)
+	return fw.fh.ReadFrom(r)
 }
 
 func (fw *ReadFromFileWrapper) Read(p []byte) (int, error) {
@@ -99,7 +100,7 @@ type FlexFile struct {
 	file_path       string
 	file_full_path  string
 	direct_nfs_path string
-	mount_info      MountEntry
+	mount_info      *MountEntry
 
 	exists       bool
 	is_nfs       bool
@@ -190,8 +191,7 @@ func NewFlexFile(file_path string) (*FlexFile, error) {
 			ff.is_os_file = true
 		}
 
-		ff.direct_nfs_path, ff.mount_info = getNFSPathFromLocal(ff.file_full_path)
-		
+		ff.direct_nfs_path, ff.mount_info = GetNFSPathFromLocal(ff.file_full_path)
 
 		//todo: get mode bits here
 
@@ -248,6 +248,7 @@ func (ff *FlexFile) Open() (ReadWriteSeekerCloserReaderFrom, error) {
 
 	} else if ff.is_nfs {
 		mount_dst, err := nfs.DialMount(ff.nfs_host, true)
+
 		if err != nil {
 			log.Warnf("DialMount %s failed\n", ff.nfs_host)
 			log.Warnf("%s", err)
@@ -310,8 +311,6 @@ func (ff *FlexFile) Open() (ReadWriteSeekerCloserReaderFrom, error) {
 		//todo: create with correct mode mits based on source file.
 		f_dst, err = os.OpenFile(ff.file_full_path, os.O_RDWR|os.O_CREATE, 0644)
 
-
-
 		if err != nil {
 			fmt.Printf("OpenFile %s failed\n", ff.file_full_path)
 			fmt.Println(err)
@@ -331,7 +330,7 @@ func (ff *FlexFile) ReadFrom(r io.Reader) (n int64, err error) {
 		//todo implement readfrom in NFS client.
 		//return 0, errors.New("ReadFrom Not implemented for nfs")
 		return
-		
+
 	} else {
 		// we are a regular file at this point.
 		var f_dst *os.File
@@ -415,9 +414,7 @@ func getBytesPerThread(size uint64, nodes int, concurrency int) uint64 {
 	return bytes_per_thread
 }
 
-
 func NewFlexFileDirectNFS(ff *FlexFile) *FlexFile {
-	
 
 	//Todo: check is nconnect is avaialbe which is best perf?
 	if ff.direct_nfs_path != "" {
@@ -432,7 +429,7 @@ func NewFlexFileDirectNFS(ff *FlexFile) *FlexFile {
 			//ff.Close()
 			return new_nfs_ff
 		}
-	
+
 	}
 	return ff
 

@@ -16,50 +16,89 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
-
 type MountEntry struct {
-	device string
-	mount_point string
+	device            string
+	mount_point       string
 	mount_point_depth int
-	protocol string
-	options string
+	protocol          string
+	options           string
+	blk_id            string
 
 	//add for ease of use
-	nfs bool          //golang default of bool is false.
-	nconnect bool     //golang default of bool is false.
+	nfs            bool //golang default of bool is false.
+	nconnect       bool //golang default of bool is false.
 	nconnect_value int
+	rsize          int
+	wsize          int
 }
 
 var mount_entries_global []MountEntry = nil
 
-func getNFSPathFromLocal(local_path string) ( string, MountEntry ) {
+func GetNFSPathFromLocal(local_path string) (string, *MountEntry) {
 
 	getMounts()
-	
-	for _, v := range mount_entries_global{
+
+	for _, v := range mount_entries_global {
 		if v.nfs {
 			if strings.HasPrefix(local_path, v.mount_point) {
 				new_path := strings.Replace(local_path, v.mount_point, v.device, 1)
-	
-				log.Debugf("found local_path: %s, \n      at nfs_path: %s",
-							local_path, new_path)
 
-				return new_path, v
-			} 
+				log.Debugf("found local_path: %s, \n      at nfs_path: %s",
+					local_path, new_path)
+
+				return new_path, &v
+			}
 		}
 	}
-	return "", MountEntry{}
+	return "", nil
 }
 
+func AddMountBlk_id() {
+	file, err := os.Open("/proc/self/mountinfo")
+	if err != nil {
+		return
+	}
+	defer file.Close()
 
+	scanner := bufio.NewScanner(file)
+
+	for scanner.Scan() {
+		// read each line
+		line := scanner.Text()
+		fields := strings.Fields(line)
+
+		// search for mating mount entry
+		var me *MountEntry = nil
+
+		// search for matching mount entry
+		for m := range mount_entries_global {
+			// because the mount point and device can contian spaces, we search like this.
+			// we already did the hard space parsing
+			if strings.Contains(line, mount_entries_global[m].mount_point) &&
+				strings.Contains(line, mount_entries_global[m].device) {
+				if me != nil {
+					log.Errorf("found multiple mount entries for %s", mount_entries_global[m].mount_point)
+					// will skip this entry, no info is better than bad info.
+					continue
+				}
+				me = &mount_entries_global[m]
+			}
+		}
+
+		if me != nil {
+			log.Debugf("found blk ID %s entry for %s", fields[2], me.mount_point)
+			me.blk_id = fields[2]
+		}
+	}
+}
 
 func getMounts() ([]MountEntry, error) {
 
 	if mount_entries_global != nil {
 		return mount_entries_global, nil
 	}
-	mount_entries_global = make([]MountEntry, 0 )
-	
+	mount_entries_global = make([]MountEntry, 0)
+
 	//example_mount_linux := "192.168.20.171:/System/Volumes/Data/Users/matthewrobertson/nfs\040space\040test /home/sile/test\040mount nfs rw,relatime,vers=3,rsize=1048576,wsize=10"
 
 	var scanner *bufio.Scanner
@@ -72,11 +111,11 @@ func getMounts() ([]MountEntry, error) {
 		}
 		defer file.Close()
 		scanner = bufio.NewScanner(file)
-		
+
 	} else if runtime.GOOS == "darwin" {
 		log.Debug("OS type is darwin (MacOS)")
 		resp, err := exec.Command("mount").Output()
-		if err != nil{
+		if err != nil {
 			return nil, err
 		}
 		scanner = bufio.NewScanner(bytes.NewReader(resp))
@@ -85,10 +124,10 @@ func getMounts() ([]MountEntry, error) {
 	}
 
 	// read mount line by line
-    for scanner.Scan() {
-        // do something with a line
-		// this will unquote spaces and apostrophes /040 
-        line := scanner.Text()
+	for scanner.Scan() {
+		// do something with a line
+		// this will unquote spaces and apostrophes /040
+		line := scanner.Text()
 		log.Debugf("%s", line)
 
 		var mount_entry MountEntry
@@ -104,12 +143,12 @@ func getMounts() ([]MountEntry, error) {
 				var err error
 				mount_entry.device, err = strconv.Unquote(`"` + items[0] + `"`)
 				if err != nil {
-					log.Debugf("conveting device %s failed, results %s", items[0],mount_entry.device)
+					log.Debugf("conveting device %s failed, results %s", items[0], mount_entry.device)
 					log.Debug(err)
 				}
-				mount_entry.mount_point, err = strconv.Unquote(`"` + items[1]+ `"`)
+				mount_entry.mount_point, err = strconv.Unquote(`"` + items[1] + `"`)
 				if err != nil {
-					log.Debugf("conveting mount point %s failed, results %s", items[1],mount_entry.mount_point)
+					log.Debugf("conveting mount point %s failed, results %s", items[1], mount_entry.mount_point)
 					log.Debug(err)
 				}
 				mount_entry.protocol = items[2]
@@ -117,7 +156,7 @@ func getMounts() ([]MountEntry, error) {
 			}
 		} else if runtime.GOOS == "darwin" {
 			//a contrived path with spaces and "  on "could mess this up.
-			items1 := strings.Split(line," on /")
+			items1 := strings.Split(line, " on /")
 			if len(items1) > 2 {
 				log.Warn("Error, unable to parse mount line, found moulitple ' on /' entries ")
 				skip = true
@@ -130,49 +169,60 @@ func getMounts() ([]MountEntry, error) {
 
 			// find beginning of options by finding the last "("
 			options_begin_index := strings.LastIndex(items1[1], "(")
-			mount_entry.mount_point = items1[1][0:options_begin_index - 1]
+			mount_entry.mount_point = items1[1][0 : options_begin_index-1]
 			//grab the options inside the ( )
-			mount_entry.options = items1[1][options_begin_index+1:len(items1[1])-1]
+			mount_entry.options = items1[1][options_begin_index+1 : len(items1[1])-1]
 			mount_entry.options = strings.ReplaceAll(mount_entry.options, " ", "")
 			//on mac the first option is the device type
 			mount_entry.protocol = strings.Split(mount_entry.options, ",")[0]
 		}
 
-		if !skip{
+		if !skip {
 			// add additional information
 
 			//mount depth, usefull for matching a local_path
 			c := strings.Count(mount_entry.mount_point, string(os.PathSeparator))
 			mount_entry.mount_point_depth = c
 
-
 			if strings.ToLower(mount_entry.protocol) == "nfs" {
 				mount_entry.nfs = true
 
 				for _, v := range strings.Split(mount_entry.options, ",") {
 					//Example: rw,relatime,vers=3,nconnect=12
-					if strings.Contains(v, "nconnect"){
+					if strings.Contains(v, "nconnect") {
 						mount_entry.nconnect = true
-						nconnect := strings.Split(v,"=")
+						nconnect := strings.Split(v, "=")
 						if len(nconnect) == 2 {
 							mount_entry.nconnect_value, _ = strconv.Atoi(nconnect[1])
 						}
 					}
+					if strings.Contains(v, "rsize") {
+						nconnect := strings.Split(v, "=")
+						if len(nconnect) == 2 {
+							mount_entry.rsize, _ = strconv.Atoi(nconnect[1])
+						}
+					}
+					if strings.Contains(v, "wsize") {
+						nconnect := strings.Split(v, "=")
+						if len(nconnect) == 2 {
+							mount_entry.wsize, _ = strconv.Atoi(nconnect[1])
+						}
+					}
 				}
 				// Log only nfs mounts;
-				log.Debugf("Device: %s Mount Point: %s , Proto: %s, nfs %t, nconnect: %t",
-						mount_entry.device, mount_entry.mount_point, mount_entry.protocol, 
-						mount_entry.nfs, mount_entry.nconnect)
+				log.Debugf("Device: %s Mount Point: %s , Proto: %s, nfs %t, nconnect: %t blk_id: %s",
+					mount_entry.device, mount_entry.mount_point, mount_entry.protocol,
+					mount_entry.nfs, mount_entry.nconnect, mount_entry.blk_id)
 			}
 
 			mount_entries_global = append(mount_entries_global, mount_entry)
 		}
-    }
+	}
 
 	//sort the array based on path depth
 	sort.Slice(mount_entries_global[:], func(i, j int) bool {
 		return mount_entries_global[i].mount_point_depth > mount_entries_global[j].mount_point_depth
-	  })
+	})
 
 	return mount_entries_global, nil
 }

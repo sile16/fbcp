@@ -50,7 +50,7 @@
             "request": "launch",
             "mode": "debug",
             "program": "${workspaceFolder}",
-            "args": [ "-verbose", "-threads", "5", "-sizeMB", "16", "-benchmark", "-verify","127.0.0.1:/Volumes/RAMDisk/junk2"]
+            "args": [ "-verbose", "-threads", "1", "-sizeMB", "100", "-benchmark","192.168.20.20:/data/junk2"]
         },
         {
             "name": "Stream Test - StreamIN",
