@@ -68,7 +68,7 @@ func AddMountBlk_id() {
 		line := scanner.Text()
 
 		// skip non nfs entries
-		if strings.Contains(line, "nfs") {
+		if !strings.Contains(line, "nfs") {
 			continue
 		}
 		

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os/exec"
 	"strconv"
+	"strings"
 
 	log "github.com/sirupsen/logrus"
 )
@@ -47,7 +48,7 @@ func sysctl_check_value (name string, value string) (bool, error) {
 	if err != nil {
 		return false, err
 	}
-	set_value := string(out[:])
+	set_value := strings.TrimSuffix(string(out[:]), "\n")
 	if set_value == value {
 		return true, nil
 	} else {
@@ -204,7 +205,7 @@ func fbcheck(c fbcp_config) int {
 	if c.fix {
 		if me != nil {
 			check_mount(me)
-			check_mtu(me.device)
+			check_mtu(me.ip)
 			check_read_ahead_kb(me, 16384)
 		}
 		set_rpc_slot_size(128)
@@ -214,7 +215,7 @@ func fbcheck(c fbcp_config) int {
 	} else {
 		if me != nil {
 			check_mount(me)
-			check_mtu(me.device)
+			check_mtu(me.ip)
 			set_read_ahead_kb(me, 16384)
 		}
 		check_rpc_slot_size(128)
