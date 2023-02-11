@@ -8,29 +8,29 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
-func NewNFSStream(src_ff *FlexFile, dst_ff *FlexFile, concurrency int, plaid bool, sizeMB uint64 ) (*NFSInfo, error) {
+func NewNFSStream(src_ff *FlexFile, dst_ff *FlexFile, c *Fbcp_config) (*NFSInfo, error) {
 
-	n := &NFSInfo{ 
-		src_ff: src_ff, dst_ff:dst_ff,
-		concurrency: concurrency, filesWritten: 0, plaid: plaid,}
+	n := &NFSInfo{
+		src_ff: src_ff, dst_ff: dst_ff,
+		c: c, filesWritten: 0}
 
-	if  dst_ff.is_directory {
+	if dst_ff.is_directory {
 		log.Fatal("Destination file is a directory.")
 	}
-	
-	if  dst_ff.pipe == nil{
-		log.Debugf("Truncating Target filename: %s", dst_ff.file_name)
-		dst_ff.Truncate(int64(src_ff.size))
-	} 
 
-	n.sizeMB = sizeMB * 1024 * 1024
-	
+	if dst_ff.pipe == nil {
+		log.Debugf("Truncating Target filename: %s", dst_ff.file_name)
+		dst_ff.Truncate(int64(src_ff.Size))
+	}
+
+	n.sizeMB = n.c.sizeMB * 1024 * 1024
+
 	return n, nil
 }
 
 type ChannelMsg struct {
-	offset uint64
-	len    uint64
+	offset int
+	len    int
 	data   *[]byte
 }
 
@@ -48,18 +48,18 @@ func (n *NFSInfo) Stream() {
 		},
 	}
 
-	ch := make(chan ChannelMsg )
+	ch := make(chan ChannelMsg)
 
 	// spin up the consumers
 
-	if n.dst_ff.is_pipe  {
+	if n.dst_ff.is_pipe {
 		log.Debug("Starting Pipe consumer")
 		cwg.Add(1)
 		go n.PipeConsumer(ch, &bufPool, cwg)
-	} else { 
+	} else {
 		log.Debug("Starting NFS consumer")
-		cwg.Add(n.concurrency)
-		for i := 0; i < n.concurrency ; i++ {
+		cwg.Add(n.c.threads)
+		for i := 0; i < n.c.threads; i++ {
 			go n.NFSConsumer(ch, &bufPool, cwg)
 		}
 	}
@@ -67,7 +67,7 @@ func (n *NFSInfo) Stream() {
 	// spin up the producers
 	if n.src_ff.is_pipe {
 		log.Debug("Starting Pipe Producer")
-		if n.plaid {
+		if n.c.plaid {
 			log.Warn("Ignoring Plaid, because producer is a pipe.")
 		}
 		pwg.Add(1)
@@ -75,25 +75,25 @@ func (n *NFSInfo) Stream() {
 	} else {
 		log.Debug("Starting NFS Producer")
 		dispatch := make(chan ChannelMsg)
-		
-		pwg.Add(n.concurrency)
-		for i := 0; i < n.concurrency ; i++{
+
+		pwg.Add(n.c.threads)
+		for i := 0; i < n.c.threads; i++ {
 			go n.NFSProducer(dispatch, ch, pwg, &bufPool)
 		}
 
-		offset := uint64(0)
+		offset := 0
 
-		if n.plaid && n.dst_ff.is_pipe{
+		if n.c.plaid && n.dst_ff.is_pipe {
 			log.Warn("Ignoring Plaid Producer because output is a pipe.")
-		} 
+		}
 
-		if n.plaid && !n.dst_ff.is_pipe {
+		if n.c.plaid && !n.dst_ff.is_pipe {
 			// dispatch reads in a plaid manner
-			// would use up a ton of memmory if consumer is 
+			// would use up a ton of memmory if consumer is
 			log.Debugf("Starting a Plaid NFS Streamer")
-			min_thread_size  := uint64(32) * 1024 * 1024
+			min_thread_size := 32 * 1024 * 1024
 
-			bytes_per_thread := n.src_ff.size / uint64(n.concurrency)
+			bytes_per_thread := n.src_ff.Size / n.c.threads
 			//remainder_per_thread :=  bytes_per_thread % min_thread_size
 			//bytes_per_thread += min_thread_size - remainder_per_thread
 
@@ -101,17 +101,17 @@ func (n *NFSInfo) Stream() {
 				bytes_per_thread = min_thread_size
 			}
 
-			per_thread_offset := uint64(0)
-			for{
-				for x:= uint64(0); x < uint64(n.concurrency) ; x++ {
+			per_thread_offset := 0
+			for {
+				for x := 0; x < n.c.threads; x++ {
 					thread_offset := bytes_per_thread * x + per_thread_offset
 					len := n.sizeMB
-					// we expect the last thread in the loop to get generated 
+					// we expect the last thread in the loop to get generated
 					// messages that may exceed eof so we need to check for it.
-					if thread_offset >= n.src_ff.size {
+					if thread_offset >= n.src_ff.Size {
 						continue
-					} else if thread_offset + n.sizeMB > n.src_ff.size {
-						len = n.src_ff.size - thread_offset
+					} else if thread_offset+n.sizeMB > n.src_ff.Size {
+						len = n.src_ff.Size - thread_offset
 					}
 					dispatch <- ChannelMsg{offset: thread_offset, len: len}
 				}
@@ -123,12 +123,12 @@ func (n *NFSInfo) Stream() {
 		} else {
 			for {
 				bytes_to_read := n.sizeMB
-				if offset + n.sizeMB > n.src_ff.size {
-					bytes_to_read = n.src_ff.size - offset
+				if offset + n.sizeMB > n.src_ff.Size {
+					bytes_to_read = n.src_ff.Size - offset
 				}
-				dispatch <- ChannelMsg{offset: uint64(offset), len: bytes_to_read}
+				dispatch <- ChannelMsg{offset: offset, len: bytes_to_read}
 				offset += bytes_to_read
-				if offset == n.src_ff.size {
+				if offset == n.src_ff.Size {
 					break
 				}
 			}
@@ -147,11 +147,11 @@ func (n *NFSInfo) NFSProducer(dispatch <-chan ChannelMsg, ch chan<- ChannelMsg, 
 	defer pwg.Done()
 
 	nfs_f, err := n.src_ff.Open()
-	if err != nil{
+	if err != nil {
 		fmt.Printf("error openeing source file %s ", n.src_ff.file_name)
 		panic(err)
 	}
-	
+
 	for msg := range dispatch {
 		nfs_f.Seek(int64(msg.offset), io.SeekStart)
 
@@ -159,15 +159,15 @@ func (n *NFSInfo) NFSProducer(dispatch <-chan ChannelMsg, ch chan<- ChannelMsg, 
 		buf := pool.Get().(*[]byte)
 		//n.mu.Unlock()
 		//buf := make([]byte, n.sizeMB)
-		bytes_read := uint64(0)
+		bytes_read := 0
 
 		for {
 			if bytes_read == msg.len {
 				break
 			}
 			bytes_to_read := msg.len - bytes_read
-			n_bytes, err := nfs_f.Read((*buf)[bytes_read:bytes_read+bytes_to_read])
-			bytes_read += uint64(n_bytes)
+			n_bytes, err := nfs_f.Read((*buf)[bytes_read : bytes_read+bytes_to_read])
+			bytes_read += n_bytes
 
 			if err != nil {
 				if err == io.EOF && n_bytes > 0 {
@@ -184,9 +184,9 @@ func (n *NFSInfo) NFSProducer(dispatch <-chan ChannelMsg, ch chan<- ChannelMsg, 
 					log.Fatalf("Unknown error reading from file, %s\n", err)
 				}
 			}
-			
+
 		}
-		ch <- ChannelMsg{offset: msg.offset, len: uint64(bytes_read), data: buf}
+		ch <- ChannelMsg{offset: msg.offset, len: bytes_read, data: buf}
 	}
 }
 
@@ -194,18 +194,18 @@ func (n *NFSInfo) NFSConsumer(ch <-chan ChannelMsg, pool *sync.Pool, cwg *sync.W
 	defer cwg.Done()
 
 	nfs_f, err := n.dst_ff.Open()
-	if err != nil{
+	if err != nil {
 		panic(err)
 	}
 	defer nfs_f.Close()
 
 	for msg := range ch {
 		nfs_f.Seek(int64(msg.offset), io.SeekStart)
-		bytes_written := uint64(0)
+		bytes_written := 0
 
-		for{
-			bytes_to_write := msg.len - uint64(bytes_written)
-			n_bytes, err := nfs_f.Write((*msg.data)[bytes_written:bytes_written+bytes_to_write])
+		for {
+			bytes_to_write := msg.len - bytes_written
+			n_bytes, err := nfs_f.Write((*msg.data)[bytes_written : bytes_written+bytes_to_write])
 			if err != nil {
 				panic(err)
 			}
@@ -213,13 +213,13 @@ func (n *NFSInfo) NFSConsumer(ch <-chan ChannelMsg, pool *sync.Pool, cwg *sync.W
 			pool.Put(msg.data)
 			//n.mu.Unlock()
 
-			bytes_written += uint64(n_bytes)
+			bytes_written += n_bytes
 
 			if bytes_written == msg.len {
 				break
 			}
 		}
-		
+
 	}
 }
 
@@ -232,17 +232,17 @@ func (n *NFSInfo) PipeProducer(ch chan<- ChannelMsg, pwg *sync.WaitGroup, pool *
 		log.Fatal("Could not open source file with Pipe Producer")
 	}
 
-	var bytes_read uint64 = 0
+	bytes_read := 0
 	for {
 		//n.mu.Lock()
 		buf := pool.Get().(*[]byte)
 		//n.mu.Unlock()
 		//buf := make([]byte, n.sizeMB)
 		n_bytes, err := reader.Read(*buf)
-		
+
 		if n_bytes > 0 {
-			ch <- ChannelMsg{offset: bytes_read, len: uint64(n_bytes), data: buf}
-			bytes_read += uint64(n_bytes)
+			ch <- ChannelMsg{offset: bytes_read, len: n_bytes, data: buf}
+			bytes_read += n_bytes
 		}
 
 		if err != nil {
@@ -265,16 +265,15 @@ func (n *NFSInfo) PipeConsumer(ch <-chan ChannelMsg, pool *sync.Pool, cwg *sync.
 	}
 	defer writer.Close()
 
-
-	items := make(map[uint64] ChannelMsg)
+	items := make(map[int]ChannelMsg)
 	//msg_count := 0
 
-	var offset uint64 = 0
+	var offset int = 0
 	for msg := range ch {
 		items[msg.offset] = msg
 
-		if len(items) > 10{
-			log.Debugf("Pipe Consumer item_count: %d offset: %d  /n",len(items), offset)
+		if len(items) > 10 {
+			log.Debugf("Pipe Consumer item_count: %d offset: %d  /n", len(items), offset)
 		}
 
 		for {
@@ -289,7 +288,7 @@ func (n *NFSInfo) PipeConsumer(ch <-chan ChannelMsg, pool *sync.Pool, cwg *sync.
 						log.Fatal(err)
 					}
 					n_bytes_written += n_bytes
-					if n_bytes == int(curr_msg.len){
+					if n_bytes == int(curr_msg.len) {
 						break
 					}
 				}
@@ -299,7 +298,7 @@ func (n *NFSInfo) PipeConsumer(ch <-chan ChannelMsg, pool *sync.Pool, cwg *sync.
 				//n.mu.Unlock()
 
 				delete(items, offset)
-				offset += uint64(curr_msg.len)
+				offset += curr_msg.len
 			} else {
 				// no more stored need to go back to the channel for next message
 				break

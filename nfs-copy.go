@@ -14,31 +14,28 @@ import (
 	"github.com/vbauerster/mpb/v7/decor"
 )
 
-func NewNFSCopy(src_ff *FlexFile, dst_ff *FlexFile, concurrency int, nodes int, nodeID int,
-	bytes_per_thread uint64, hash bool, copyv2 bool, progress bool) (*NFSInfo, error) {
+func NewNFSCopy(src_ff *FlexFile, dst_ff *FlexFile, c *Fbcp_config) (*NFSInfo, error) {
 
-	if bytes_per_thread == 0 {
-		bytes_per_thread = getBytesPerThread(src_ff.size, nodes, concurrency)
-	}
+	bytes_per_thread := getBytesPerThread(src_ff.Size, c.nodes, c.threads)
+	needed_threads_per_node := getThreadCount(int(src_ff.Size), c.nodes, bytes_per_thread)
 
-	needed_threads_per_node := getThreadCount(src_ff.size, uint64(nodes), bytes_per_thread)
-
-	if needed_threads_per_node < uint64(concurrency) {
+	if needed_threads_per_node < c.threads {
 		//File is too small for this concurrency, we are reducing it.
-		concurrency = int(needed_threads_per_node)
-		log.Infof("Thread count reduced to %d because of a small file. ", concurrency)
-	} else if needed_threads_per_node > uint64(concurrency) {
-		log.Warnf("Thread count is increased to %d in order to hash entire file. ", concurrency)
-		concurrency = int(needed_threads_per_node)
+		c.threads = int(needed_threads_per_node)
+		log.Infof("Thread count reduced to %d because of a small file. ", c.threads)
+
+	} else if needed_threads_per_node > c.threads {
+		log.Warnf("Thread count is increased to %d in order to hash entire file. ", c.threads)
+		c.threads = int(needed_threads_per_node)
 	}
 
 	nfsNFSCopy := &NFSInfo{
 		src_ff: src_ff, dst_ff: dst_ff,
-		concurrency: concurrency, filesWritten: 0,
-		hashes:       make([][]byte, concurrency),
-		thread_bytes: make([]uint64, concurrency),
-		hash:         hash, copyv2: copyv2,
-		progress: progress,}
+		filesWritten: 0,
+		hashes:       make([][]byte, c.threads),
+		thread_bytes: make([]int, c.threads),
+		c:            c,
+	}
 
 	if !nfsNFSCopy.src_ff.exists {
 		log.Fatalf("Error: source fle %s doesn't exist", nfsNFSCopy.src_ff.file_name)
@@ -49,31 +46,31 @@ func NewNFSCopy(src_ff *FlexFile, dst_ff *FlexFile, concurrency int, nodes int, 
 		log.Fatal("Target path is a directory")
 	}
 
-	if !nfsNFSCopy.dst_ff.exists || nfsNFSCopy.dst_ff.size != nfsNFSCopy.src_ff.size {
+	if !nfsNFSCopy.dst_ff.exists || nfsNFSCopy.dst_ff.Size != nfsNFSCopy.src_ff.Size {
 		//truncate
-		dst_ff.Truncate(int64(src_ff.size))
+		dst_ff.Truncate(int64(src_ff.Size))
 	}
 
 	// min each thread will get minimum of 16 MB of data
 	// this also handles small files gracefully.
-	if bytes_per_thread < min_thread_size {
-		bytes_per_thread = min_thread_size
+	if bytes_per_thread < min_thread_size_bytes {
+		bytes_per_thread = min_thread_size_bytes
 	}
 
 	nfsNFSCopy.sizeMB = bytes_per_thread
-	nfsNFSCopy.nodeSize = bytes_per_thread * uint64(concurrency)
-	nfsNFSCopy.nodeOffset = uint64(nodeID) * nfsNFSCopy.nodeSize
+	nfsNFSCopy.nodeSize = bytes_per_thread * c.threads
+	nfsNFSCopy.nodeOffset = c.nodeID * nfsNFSCopy.nodeSize
 
 	return nfsNFSCopy, nil
 }
 
 func (n *NFSInfo) SpreadCopy() (float64, []byte) {
 
-	atomic.StoreInt32(&n.atm_finished, 0)
-	atomic.StoreUint64(&n.atm_counter_bytes_written, 0)
+	atomic.StoreInt64(&n.atm_finished, 0)
+	atomic.StoreInt64(&n.atm_counter_bytes_written, 0)
 
 	var p *mpb.Progress
-	if n.progress {
+	if n.c.progress {
 		p = mpb.New(
 			mpb.WithWaitGroup(&n.wg),
 			mpb.WithWidth(60),
@@ -85,16 +82,16 @@ func (n *NFSInfo) SpreadCopy() (float64, []byte) {
 
 	offset := n.nodeOffset
 
-	for i := 0; i < n.concurrency; i++ {
+	for i := 0; i < n.c.threads; i++ {
 
 		// also we can't exceed the end of the file.
 		max_bytes_to_read := n.sizeMB
-		if max_bytes_to_read+offset > n.src_ff.size {
-			max_bytes_to_read = n.src_ff.size - offset
+		if max_bytes_to_read+offset > int(n.src_ff.Size) {
+			max_bytes_to_read = int(n.src_ff.Size) - offset
 		}
 
 		var bar *mpb.Bar
-		if n.progress {
+		if n.c.progress {
 			name := fmt.Sprintf("Thread#%d:", i)
 			bar = p.AddBar(int64(max_bytes_to_read),
 				mpb.PrependDecorators(
@@ -109,7 +106,7 @@ func (n *NFSInfo) SpreadCopy() (float64, []byte) {
 			)
 		}
 		n.wg.Add(1)
-		if n.copyv2 {
+		if n.c.sendfile {
 			go n.copyOneFileChunkv2(offset, max_bytes_to_read, i, bar)
 		} else {
 			go n.copyOneFileChunk(offset, max_bytes_to_read, i, bar)
@@ -132,7 +129,7 @@ func (n *NFSInfo) SpreadCopy() (float64, []byte) {
 			break
 		}
 		log.Debugf("Thread %d hash: %x  offset: %d  bytes: %d",
-			i+1, n.hashes[i], n.nodeOffset+uint64(i)*n.sizeMB, n.thread_bytes[i])
+			i+1, n.hashes[i], n.nodeOffset+i*n.sizeMB, n.thread_bytes[i])
 		hasher.Write(n.hashes[i])
 	}
 	var hashValue []byte
@@ -142,14 +139,14 @@ func (n *NFSInfo) SpreadCopy() (float64, []byte) {
 		hashValue = nil
 	}
 
-	total_mb_bytes := atomic.LoadUint64(&n.atm_counter_bytes_written) / (1024 * 1024)
+	total_mb_bytes := atomic.LoadInt64(&n.atm_counter_bytes_written) / (1024 * 1024)
 
 	log.Infof("Write Finished: Time: %f s , %d  MiB Transfered\n", elapsed.Seconds(), total_mb_bytes)
 
 	return float64(total_mb_bytes) / (float64(elapsed.Seconds())), hashValue
 }
 
-func (n *NFSInfo) copyOneFileChunk(offset uint64, num_bytes uint64, threadID int, bar *mpb.Bar) {
+func (n *NFSInfo) copyOneFileChunk(offset int, num_bytes int, threadID int, bar *mpb.Bar) {
 
 	defer n.wg.Done()
 
@@ -159,8 +156,8 @@ func (n *NFSInfo) copyOneFileChunk(offset uint64, num_bytes uint64, threadID int
 
 	max_bytes_to_read := num_bytes
 
-	var f_src ReadWriteSeekerCloser = nil
-	var f_dst ReadWriteSeekerCloser = nil
+	var f_src *FlexFileHandle = nil
+	var f_dst *FlexFileHandle = nil
 
 	var err error = nil
 
@@ -168,7 +165,7 @@ func (n *NFSInfo) copyOneFileChunk(offset uint64, num_bytes uint64, threadID int
 	f_src, err = n.src_ff.Open()
 	if err != nil {
 		log.Fatalf(" Thread %d Error opening source file: %s . \n Error: %s",
-			threadID, n.src_ff.file_full_path, err)
+			threadID, n.src_ff.File_full_path, err)
 		return
 	}
 	defer f_src.Close()
@@ -177,7 +174,7 @@ func (n *NFSInfo) copyOneFileChunk(offset uint64, num_bytes uint64, threadID int
 	f_dst, err = n.dst_ff.Open()
 	if err != nil {
 		log.Fatalf(" Thread %d Error opening destination file: %s . \n Error: %s",
-			threadID, n.dst_ff.file_full_path, err)
+			threadID, n.dst_ff.File_full_path, err)
 		return
 	}
 	defer f_dst.Close()
@@ -186,25 +183,25 @@ func (n *NFSInfo) copyOneFileChunk(offset uint64, num_bytes uint64, threadID int
 
 	hasher := xxh3.New()
 
-	thread_bytes_written := uint64(0)
-	thread_bytes_read := uint64(0)
+	thread_bytes_written := 0
+	thread_bytes_read := 0
 
 	f_src.Seek(int64(offset), io.SeekStart)
 	f_dst.Seek(int64(offset), io.SeekStart)
 
 	for {
-		if atomic.LoadInt32(&n.atm_finished) == 1 {
+		if atomic.LoadInt64(&n.atm_finished) == 1 {
 			break
 		}
 
 		remaining_bytes := max_bytes_to_read - thread_bytes_read
-		bytes_to_read := uint64(len(srcBuf))
+		bytes_to_read := len(srcBuf)
 
 		if bytes_to_read > remaining_bytes {
 			bytes_to_read = remaining_bytes
 		}
 		n_bytes, err := f_src.Read(srcBuf[0:bytes_to_read])
-		thread_bytes_read += uint64(n_bytes)
+		thread_bytes_read += n_bytes
 
 		if err != nil {
 			if !(err == io.EOF && n_bytes == int(bytes_to_read)) {
@@ -213,11 +210,11 @@ func (n *NFSInfo) copyOneFileChunk(offset uint64, num_bytes uint64, threadID int
 				return
 			}
 		}
-		if n.hash {
+		if n.c.hash {
 			hasher.Write(srcBuf[0:n_bytes])
 		}
 
-		n_bytes_written_this_chunk := uint64(0)
+		n_bytes_written_this_chunk := 0
 		for {
 			n_bytes_written, err := f_dst.Write(srcBuf[n_bytes_written_this_chunk:n_bytes])
 
@@ -229,12 +226,12 @@ func (n *NFSInfo) copyOneFileChunk(offset uint64, num_bytes uint64, threadID int
 				log.Fatalf("Thread %d Error: write error! %s\n", threadID, err)
 				break
 			}
-			n_bytes_written_this_chunk += uint64(n_bytes_written)
-			if n.progress {
+			n_bytes_written_this_chunk += n_bytes_written
+			if n.c.progress {
 				bar.IncrBy(n_bytes_written)
 			}
 
-			if n_bytes_written_this_chunk == uint64(n_bytes) {
+			if n_bytes_written_this_chunk == n_bytes {
 				break
 			}
 		}
@@ -253,11 +250,12 @@ func (n *NFSInfo) copyOneFileChunk(offset uint64, num_bytes uint64, threadID int
 	n.hashes[threadID] = hasher.Sum([]byte{})
 	n.thread_bytes[threadID] = thread_bytes_written
 
-	atomic.AddUint64(&n.atm_counter_bytes_read, thread_bytes_read)
-	atomic.AddUint64(&n.atm_counter_bytes_written, thread_bytes_written)
+	atomic.AddInt64(&n.atm_counter_bytes_read, int64(thread_bytes_read))
+	atomic.AddInt64(&n.atm_counter_bytes_written, int64(thread_bytes_written))
+
 }
 
-func (n *NFSInfo) copyOneFileChunkv2(offset uint64, num_bytes uint64, threadID int, bar *mpb.Bar) {
+func (n *NFSInfo) copyOneFileChunkv2(offset int, num_bytes int, threadID int, bar *mpb.Bar) {
 
 	defer n.wg.Done()
 
@@ -265,8 +263,8 @@ func (n *NFSInfo) copyOneFileChunkv2(offset uint64, num_bytes uint64, threadID i
 	//Avoids slamming server
 	time.Sleep(time.Duration(threadID) * 2 * time.Millisecond)
 
-	var f_src ReadWriteSeekerCloser = nil
-	var f_dst ReadWriteSeekerCloserReaderFrom = nil
+	var f_src *FlexFileHandle = nil
+	var f_dst *FlexFileHandle = nil
 
 	var err error = nil
 
@@ -279,7 +277,7 @@ func (n *NFSInfo) copyOneFileChunkv2(offset uint64, num_bytes uint64, threadID i
 		time.Sleep(time.Duration(sleepfor) * time.Millisecond)
 		f_src, err = n.src_ff.Open()
 		if err != nil {
-			log.Fatalf("Error opening source file: %s", n.src_ff.file_full_path)
+			log.Fatalf("Error opening source file: %s", n.src_ff.File_full_path)
 		}
 	}
 	defer f_src.Close()
@@ -294,7 +292,7 @@ func (n *NFSInfo) copyOneFileChunkv2(offset uint64, num_bytes uint64, threadID i
 		time.Sleep(time.Duration(sleepfor) * time.Millisecond)
 		f_dst, err = n.dst_ff.Open()
 		if err != nil {
-			log.Fatalf("Error opening destination file: %s", n.dst_ff.file_full_path)
+			log.Fatalf("Error opening destination file: %s", n.dst_ff.File_full_path)
 		}
 	}
 	defer f_dst.Close()
@@ -315,6 +313,6 @@ func (n *NFSInfo) copyOneFileChunkv2(offset uint64, num_bytes uint64, threadID i
 	}
 	log.Debugf(" Thread %d Wrote %d Bytes", threadID, bytes_written)
 
-	atomic.AddUint64(&n.atm_counter_bytes_read, uint64(bytes_written))
-	atomic.AddUint64(&n.atm_counter_bytes_written, uint64(bytes_written))
+	atomic.AddInt64(&n.atm_counter_bytes_read, bytes_written)
+	atomic.AddInt64(&n.atm_counter_bytes_written, bytes_written)
 }

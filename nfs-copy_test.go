@@ -14,16 +14,24 @@ func TestNFSCopyHash(tb *testing.T) {
 	log.SetLevel(log.DebugLevel)
 
 	for _, tc := range hash_tests {
-		name := tc.name + "__" + strconv.FormatInt(int64(tc.threads), 10) + " Threads"
+		name := tc.name + "__" + strconv.Itoa(tc.threads) + " Threads"
 
 		tb.Run(name, func(t *testing.T) {
 
-			file_path := filepath.Join("tempdir", strconv.FormatUint(tc.size, 10))
+			file_path := filepath.Join("tempdir", strconv.Itoa(tc.size))
 
 			src_ff, _ := NewFlexFile(file_path)
 			dst_ff, _ := NewFlexFile("/dev/null")
 
-			nfscopy, _ := NewNFSCopy(src_ff, dst_ff, tc.threads, 1, 0, 0, true, false, false)
+			
+			nfscopy, _ := NewNFSCopy(src_ff, dst_ff, &Fbcp_config{
+				threads: tc.threads, 
+				nodes: 1,
+				nodeID: 0,
+				hash: true, 
+				sendfile: false, 
+				progress: false,
+		   })
 			_, hash := nfscopy.SpreadCopy()
 
 			hash_string := fmt.Sprintf("%x", hash)
@@ -48,16 +56,22 @@ func TestNFSCopyValidate(tb *testing.T) {
 
 		for thread := 0; thread < len(thread_list); thread++ {
 			for copyv2 := 0; copyv2 < len(copyv2_list); copyv2++ {
-				name := tc.name + "_CP_" + strconv.FormatInt(int64(thread_list[thread]), 10) + " Threads"
+				name := tc.name + "_CP_" + strconv.Itoa(thread_list[thread]) + " Threads"
 				if copyv2_list[copyv2] {
 					name += "_copyv2"
 				}
 
-				file_path := filepath.Join("tempdir", strconv.FormatUint(tc.size, 10))
+				file_path := filepath.Join("tempdir", strconv.Itoa(tc.size))
 
 				//hash the source file first out of the timed function
 				src_ff_hash, _ := NewFlexFile(file_path)
-				nfshash_src, _ := NewSpreadHash(src_ff_hash, thread_list[thread], 1, 0, 0, false)
+				//nfshash_src, _ := NewSpreadHash(src_ff_hash, thread_list[thread], 1, 0, 0, false)
+				nfshash_src, _ := NewSpreadHash(src_ff_hash, &Fbcp_config{
+					threads: thread_list[thread],
+					nodes: 1, 
+					nodeID: 0,
+					sizeMB: 0, 
+					progress: false})
 				_, verify_hash := nfshash_src.SpreadHash()
 
 				verify_hash_string := fmt.Sprintf("%x", verify_hash)
@@ -67,7 +81,13 @@ func TestNFSCopyValidate(tb *testing.T) {
 
 				tb.Run(name, func(t *testing.T) {
 					//copy the file
-					nfscopy, _ := NewNFSCopy(src_ff, dst_ff, thread_list[thread], 1, 0, 0, true, copyv2_list[copyv2], false)
+					nfscopy, _ := NewNFSCopy(src_ff, dst_ff, &Fbcp_config{
+						threads: thread_list[thread], 
+						nodes: 1,
+						nodeID:  0,
+						hash: true,
+						sendfile: copyv2_list[copyv2],
+						progress: false})
 					_, copy_hash := nfscopy.SpreadCopy()
 
 					if !copyv2_list[copyv2] {
@@ -79,7 +99,11 @@ func TestNFSCopyValidate(tb *testing.T) {
 					}
 
 					dst_ff_hash, _ := NewFlexFile("tempdir/dest_file")
-					nfshash, _ := NewSpreadHash(dst_ff_hash, thread_list[thread], 1, 0, 0, false)
+					nfshash, _ := NewSpreadHash(dst_ff_hash, &Fbcp_config{
+						threads: thread_list[thread],
+						nodes: 1, 
+						nodeID: 0,
+						progress: false})
 					_, dst_hash := nfshash.SpreadHash()
 
 					dst_hash_string := fmt.Sprintf("%x", dst_hash)
@@ -111,7 +135,7 @@ func TestNFSRemoteCopyHashingValidate(tb *testing.T) {
 
 		for thread := 0; thread < len(thread_list); thread++ {
 
-			local_file_path := filepath.Join("tempdir", strconv.FormatUint(tc.size, 10))
+			local_file_path := filepath.Join("tempdir", strconv.Itoa(tc.size))
 
 			if local_file_path == "0" {
 				log.Info("we have a 0 file.")
@@ -121,7 +145,11 @@ func TestNFSRemoteCopyHashingValidate(tb *testing.T) {
 
 			//hash the source file first out of the timed function
 			src_ff_hash, _ := NewFlexFile(local_file_path)
-			nfshash_src, _ := NewSpreadHash(src_ff_hash, thread_list[thread], 1, 0, 0, false)
+			nfshash_src, _ := NewSpreadHash(src_ff_hash, &Fbcp_config{
+				threads: thread_list[thread],
+				nodes: 1,
+				nodeID: 0,
+				progress: false})
 			_, verify_hash := nfshash_src.SpreadHash()
 
 			verify_hash_string := fmt.Sprintf("%x", verify_hash)
@@ -135,13 +163,13 @@ func TestNFSRemoteCopyHashingValidate(tb *testing.T) {
 
 		for thread := 0; thread < len(thread_list); thread++ {
 			for copyv2 := 0; copyv2 < len(copyv2_list); copyv2++ {
-				name := tc.name + "_CP_" + strconv.FormatInt(int64(thread_list[thread]), 10) + " Threads"
+				name := tc.name + "_CP_" + strconv.Itoa(thread_list[thread]) + " Threads"
 				if copyv2_list[copyv2] {
 					name += "_copyv2"
 				}
 
-				local_file_path := filepath.Join("tempdir", strconv.FormatUint(tc.size, 10))
-				remote_file_path := nfs_server + strconv.FormatUint(tc.size, 10)
+				local_file_path := filepath.Join("tempdir", strconv.Itoa(tc.size))
+				remote_file_path := nfs_server + strconv.Itoa(tc.size)
 
 				src_ff, _ := NewFlexFile(local_file_path)
 				dst_ff, _ := NewFlexFile(remote_file_path)
@@ -151,7 +179,13 @@ func TestNFSRemoteCopyHashingValidate(tb *testing.T) {
 
 				tb.Run(name, func(t *testing.T) {
 					//copy the file
-					nfscopy, _ := NewNFSCopy(src_ff, dst_ff, thread_list[thread], 1, 0, 0, true, copyv2_list[copyv2], false)
+					nfscopy, _ := NewNFSCopy(src_ff, dst_ff, &Fbcp_config{
+						threads: thread_list[thread], 
+						nodes: 1, 
+						nodeID: 0, 
+						hash: true, 
+						sendfile: copyv2_list[copyv2], 
+						progress: false})
 					_, copy_hash := nfscopy.SpreadCopy()
 
 					if !copyv2_list[copyv2] {
@@ -165,7 +199,13 @@ func TestNFSRemoteCopyHashingValidate(tb *testing.T) {
 					src_ff_copy_back, _ := NewFlexFile(remote_file_path)
 					dst_ff_copy_back, _ := NewFlexFile("tempdir/dest_file")
 
-					nfscopyback, _ := NewNFSCopy(src_ff_copy_back, dst_ff_copy_back, thread_list[thread], 1, 0, 0, true, copyv2_list[copyv2], false)
+					nfscopyback, _ := NewNFSCopy(src_ff_copy_back, dst_ff_copy_back, &Fbcp_config{
+						threads: thread_list[thread], 
+						nodes: 1, 
+						nodeID: 0,
+						hash: true,
+						sendfile: copyv2_list[copyv2],
+						progress: false})
 					_, dst_hash := nfscopyback.SpreadCopy()
 
 					dst_hash_string := fmt.Sprintf("%x", dst_hash)
@@ -188,7 +228,8 @@ func TestNFSRemoteCopyValidateWithSpreadHash(tb *testing.T) {
 	//copy the file
 	//hash remotely.
 
-	nfs_server := "127.0.0.1:/Volumes/RAMDisk/"
+	//nfs_server := "127.0.0.1:/Volumes/RAMDisk/"
+	nfs_server := "192.168.20.20:/data/"
 	thread_list := []int{1, 3, 7}
 
 	// pre-calculate all hashes on the local files.
@@ -197,7 +238,7 @@ func TestNFSRemoteCopyValidateWithSpreadHash(tb *testing.T) {
 
 		for thread := 0; thread < len(thread_list); thread++ {
 
-			local_file_path := filepath.Join("tempdir", strconv.FormatUint(tc.size, 10))
+			local_file_path := filepath.Join("tempdir", strconv.Itoa(tc.size))
 
 			if local_file_path == "0" {
 				log.Info("we have a 0 file.")
@@ -207,7 +248,11 @@ func TestNFSRemoteCopyValidateWithSpreadHash(tb *testing.T) {
 
 			//hash the source file first out of the timed function
 			src_ff_hash, _ := NewFlexFile(local_file_path)
-			nfshash_src, _ := NewSpreadHash(src_ff_hash, thread_list[thread], 1, 0, 0, false)
+			nfshash_src, _ := NewSpreadHash(src_ff_hash, &Fbcp_config{
+				threads: thread_list[thread], 
+				nodes: 1, 
+				nodeID: 0, 
+				progress: false})
 			_, verify_hash := nfshash_src.SpreadHash()
 
 			verify_hash_string := fmt.Sprintf("%x", verify_hash)
@@ -226,8 +271,8 @@ func TestNFSRemoteCopyValidateWithSpreadHash(tb *testing.T) {
 					name += "_copyv2"
 				}
 
-				local_file_path := filepath.Join("tempdir", strconv.FormatUint(tc.size, 10))
-				remote_file_path := nfs_server + strconv.FormatUint(tc.size, 10)
+				local_file_path := filepath.Join("tempdir", strconv.Itoa(tc.size))
+				remote_file_path := nfs_server + strconv.Itoa(tc.size)
 
 				validation_hash_name := local_file_path + "_t" + strconv.FormatInt(int64(thread_list[thread]), 10)
 				validation_hash := local_hashes[validation_hash_name]
@@ -237,7 +282,13 @@ func TestNFSRemoteCopyValidateWithSpreadHash(tb *testing.T) {
 
 				tb.Run(name, func(t *testing.T) {
 					//copy the file
-					nfscopy, _ := NewNFSCopy(src_ff, dst_ff, thread_list[thread], 1, 0, 0, true, copyv2_list[copyv2], false)
+					nfscopy, _ := NewNFSCopy(src_ff, dst_ff, &Fbcp_config{
+						threads: thread_list[thread], 
+						nodes: 1, 
+						nodeID: 0,
+						hash: true, 
+						sendfile: copyv2_list[copyv2], 
+						progress: false})
 
 					_, copy_hash := nfscopy.SpreadCopy()
 
@@ -250,7 +301,11 @@ func TestNFSRemoteCopyValidateWithSpreadHash(tb *testing.T) {
 					}
 
 					dst_ff_for_hash_check, _ := NewFlexFile(remote_file_path)
-					nfshasher_dst, _ := NewSpreadHash(dst_ff_for_hash_check, thread_list[thread], 1, 0, 0, false)
+					nfshasher_dst, _ := NewSpreadHash(dst_ff_for_hash_check, &Fbcp_config{
+						threads: thread_list[thread], 
+						nodes: 1, 
+						nodeID: 0, 
+						progress: false})
 					_, nfshash_dst := nfshasher_dst.SpreadHash()
 
 					remote_hash_string := fmt.Sprintf("%x", nfshash_dst)
