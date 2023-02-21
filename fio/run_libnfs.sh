@@ -28,6 +28,6 @@ do
         #--output-format=json
 
         # Run the benchmark
-        fio --bs=$block_size --iodepth=$io_depth --runtime=$RUN_TIME libnfs.fio  --output=$output_file 
+        NFS_URL=$NFS_URL fio --bs=$block_size --iodepth=$io_depth --runtime=$RUN_TIME libnfs.fio  --output=$output_file 
     done
 done
