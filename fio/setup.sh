@@ -22,7 +22,10 @@ mount -t nfs -o vers=3,nconnect=16 192.168.20.20:/data /mnt/fb200
 ./fbcp -checkmount /mnt/fb200
 
 # run manual fio to test network
-# fio --numjobs=16 --filesize 100M --nrfiles 4 --iodepth 100 --blocksize 524288 --group_reporting libnfs_write.fio
-# fio --numjobs=16 --filesize 100M --nrfiles 4 --iodepth 100 --blocksize 524288 --group_reporting libnfs_read.fio
+# fio --numjobs=16 --filesize 100M --nrfiles 4 --iodepth 100 --bs 524288 --group_reporting libnfs_write.fio
+# fio --numjobs=16 --filesize 100M --nrfiles 4 --iodepth 100 --bs 524288 --group_reporting libnfs_read.fio
+
+# create test files
+# dd if=/dev/zero of=/mnt/fb200/testfile bs=1M count=100
 
 

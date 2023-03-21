@@ -10,8 +10,11 @@ NCONNECTS=("1" "16")
 BLOCK_SIZES=("524288")
 IO_DEPTHS=("1" "100")
 
+# from FlashBlade to dev null
 CP1_SRC=$MNT_DIR/write.0.0
 CP1_DST=/dev/null
+# from local file to flashblade,
+# also does a recopy, so that local cache can be used so we are testing on destination write
 CP2_SRC=$MNT_DIR/write.0.0
 CP2_DST=$MNT_DIR/read.0.0
 SLEEP_TIME=10
@@ -20,6 +23,8 @@ OUTPUT_DIR=outputs
 # Iterate through block sizes and IO depths
 
 mkdir -p $OUTPUT_DIR
+mkdir -p $MNT_DIR
+
 
 for NFS_VERS in "${NFS_VERSS[@]}"
 do
@@ -70,6 +75,11 @@ do
         echo "Running CP2: time /usr/bin/cp -r $CP2_SRC $CP2_DST" | tee ${output_file}_cp2
         du -hs $CP2_SRC >> ${output_file}_cp2
         { time /usr/bin/cp -r $CP2_SRC $CP2_DST ; } 2>>  ${output_file}_cp2
+        echo Sleeping for $SLEEP_TIME seconds `sleep $SLEEP_TIME`
+
+        echo "Running CP2 Recopy: time /usr/bin/cp -r $CP2_SRC $CP2_DST" | tee ${output_file}_cp2_recopy
+        du -hs $CP2_SRC >> ${output_file}_cp2_recopy
+        { time /usr/bin/cp -r $CP2_SRC $CP2_DST ; } 2>>  ${output_file}_cp2_recopy
         echo Sleeping for $SLEEP_TIME seconds `sleep $SLEEP_TIME`
 
 
