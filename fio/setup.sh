@@ -21,4 +21,8 @@ mkdir /mnt/fb200
 mount -t nfs -o vers=3 192.168.20.20:/data /mnt/fb200
 ./fbcp -checkmount /mnt/fb200
 
+# run manual fio to test network
+# fio --numjobs=16 --size 100M --nrfiles 4 --group_reporting libnfs_write.fio
+# fio --numjobs=16 --size 100M --nrfiles 4 --group_reporting libnfs_read.fio
+
 

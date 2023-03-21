@@ -168,7 +168,7 @@ func set_rpc_slot_size(size int) (int, error) {
 }
 
 func usage() int {
-	fmt.Printf("Usage: fbcp -fbcheck [-fix] [local_fs_mountpoint]")
+	fmt.Printf("Usage: fbcp -checkmount [-fix] [local_fs_mountpoint]")
 	return 1
 }
 

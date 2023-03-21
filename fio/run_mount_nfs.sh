@@ -1,12 +1,15 @@
 #!/bin/bash
 
-
-BLOCK_SIZES=("524288")
-IO_DEPTHS=("1" "100")
-NFS_VERSS=("3" "4")
-NCONNECTS=("1" "16")
+#Mount Options
 NFS_URL=192.168.20.20:/data
 MNT_DIR=/mnt/fb200
+NFS_VERSS=("3" "4")
+NCONNECTS=("1" "16")
+
+#FIO Options
+BLOCK_SIZES=("524288")
+IO_DEPTHS=("1" "100")
+
 CP1_SRC=$MNT_DIR/write.0.0
 CP1_DST=/dev/null
 CP2_SRC=$MNT_DIR/write.0.0
