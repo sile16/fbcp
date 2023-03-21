@@ -1,0 +1,14 @@
+[global]
+directory=/mnt/fb200
+ioengine=libaio
+size=4G
+numjobs=1
+
+time_based=1
+ramp_time=2s
+runtime=10s
+#filename_format=myfiles.$clientuid.$jobnum.$filenum
+
+[write]
+rw=write
+
