@@ -2,14 +2,10 @@
 directory=/mnt/fb200
 ioengine=libaio
 size=100G
-numjobs=1
-iodepth=100
-blocksize=524288
 
 time_based=1
 ramp_time=2s
 runtime=30s
-nrfiles=1
 
 [read]
 rw=read
