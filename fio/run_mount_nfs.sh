@@ -4,9 +4,10 @@
 #JOB_NAME="benchmark"
 #OUTPUT_DIR="/path/to/output/directory"
 
-BLOCK_SIZES=("4k" "512k")
-IO_DEPTHS=("1" "16" "32")
-NFS_VERSS=("3" "4")
+BLOCK_SIZES=("524288")
+IO_DEPTHS=("100")
+NFS_VERSS=("3" "3" "4")
+NCONNECTS=("1" "16" "1")
 
 # Set NFS URL from first positional parameter
 NFS_URL="$1"

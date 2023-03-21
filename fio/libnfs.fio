@@ -1,27 +1,26 @@
 [global]
 #nfs_url=nfs://127.0.0.1/Volumes/RAMDisk
 nfs_url=${NFS_URL}
-#blocksize=524288
-blocksize=${BLOCK_SIZE}
+blocksize=524288
+#blocksize=${BLOCK_SIZE}
 iodepth=${IO_DEPTH}
+
 ioengine=nfs
 size=104857600
 lat_percentiles=1
 group_reporting
 numjobs=1
+
 filename_format=myfiles.$clientuid.$jobnum.$filenum
 time_based=1
 ramp_time=2s
-runtime=10s
+runtime=30s
 
 [write]
 rw=write
-runtime=10s
 stonewall
 
 [read]
-stonewall
 rw=read
-runtime=10s
 
-# /fio ../fbcp/fio/libnfs.fio --csv
+# ./fio ../fbcp/fio/libnfs.fio --csv
