@@ -72,20 +72,20 @@ do
             for io_depth in "${IO_DEPTHS[@]}"
             do
                 # Set up output file name
-                output_file=${output_file}_bs_${block_size}_iod_${io_depth}
+                output_file_fio=${output_file}_bs_${block_size}_iod_${io_depth}
 
                 
                 echo
                 echo Running Write Test `date`
                 # Set up output file name
-                fio --bs=$block_size --iodepth=$io_depth libnfs_write.fio  --output=${output_file}_write
+                fio --bs=$block_size --iodepth=$io_depth libnfs_write.fio  --output=${output_file_fio}_write
                 echo
                 echo Write Test Complete `date`
 		        echo
                 echo Running Read Test `date`
                 echo
                 # Set up output file name
-                fio --bs=$block_size --iodepth=$io_depth libnfs_read.fio  --output=${output_file}_read
+                fio --bs=$block_size --iodepth=$io_depth libnfs_read.fio  --output=${output_file_fio}_read
                 echo
                 echo Read Test Complete `date`
                 echo
