@@ -18,4 +18,7 @@ yum install -y openssh-server git nfs-utils fio
 git clone https://github.com/sile16/fbcp.git
 cd fbcp
 mkdir /mnt/fb200
-    mount -t nfs -o vers=3 192.168.20.20:/data /mnt/fb200
+mount -t nfs -o vers=3 192.168.20.20:/data /mnt/fb200
+./fbcp -checkmount /mnt/fb200
+
+

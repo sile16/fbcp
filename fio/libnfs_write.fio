@@ -1,12 +1,12 @@
 [global]
 directory=/mnt/fb200
 ioengine=libaio
-size=4G
+size=100G
 numjobs=1
 
 time_based=1
 ramp_time=2s
-runtime=10s
+runtime=30s
 #filename_format=myfiles.$clientuid.$jobnum.$filenum
 
 [write]
