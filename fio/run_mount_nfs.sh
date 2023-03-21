@@ -12,14 +12,17 @@ CP1_DST=/dev/null
 CP2_SRC=$MNT_DIR/write.0.0
 CP2_DST=$MNT_DIR/read.0.0
 SLEEP_TIME=10
+OUTPUT_DIR=outputs
 
 # Iterate through block sizes and IO depths
+
+mkdir -p $OUTPUT_DIR
 
 for NFS_VERS in "${NFS_VERSS[@]}"
 do
     for NCONNECT in "${NCONNECTS[@]}"
     do
-        output_file="outputs/fio_nfsver_${NFS_VERS}_nc_${NCONNECT}"
+        output_file="$OUTPUT_DIR/fio_nfsver_${NFS_VERS}_nc_${NCONNECT}"
 
         # if nconnect is gt 1 and nfs vers is 4
         # we break from the loop, FB doesn't support nconnnect with nfsv4
@@ -51,8 +54,8 @@ do
 
 
         # check the mount with fbcheck
-        ../fbcp -checkmount $MNT_DIR 2&>1 >> ${output_file}.notes
-
+        ../fbcp -checkmount $MNT_DIR 2>> ${output_file}.notes
+        echo >> ${output_file}.notes
         # log the mount settings
         mount | grep $MNT_DIR >> ${output_file}.notes
 
