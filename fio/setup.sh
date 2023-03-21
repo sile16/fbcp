@@ -28,4 +28,10 @@ mount -t nfs -o vers=3,nconnect=16 192.168.20.20:/data /mnt/fb200
 # create test files
 # dd if=/dev/zero of=/mnt/fb200/testfile bs=1M count=100
 
+# MTU
+# ip link set dev ens2 mtu 9000
+# ip link list
 
+
+# Tar up a folder called outputs into a file called outputs.tar.gz
+# tar -czvf outputs.tar.gz outputs

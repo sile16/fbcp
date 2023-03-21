@@ -1,7 +1,7 @@
 #!/bin/bash
 
 #Mount Options
-NFS_URL=192.168.20.20:/data
+NFS_URL=10.10.102.10:/data
 MNT_DIR=/mnt/fb200
 NFS_VERSS=("3" "4")
 NCONNECTS=("1" "16")
